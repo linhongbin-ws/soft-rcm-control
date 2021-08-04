@@ -1,3 +1,6 @@
+% load simulated data
+load(fullfile( '..','data','dvrk_mtm_psm.mat'))
+
 PSM_q0 = zeros(6,1);
 PSM_q = [PSM_q0];
 time_delta = 0.01;
@@ -5,19 +8,28 @@ lambda = 1/time_delta;
 duration = 5;
 PSM_Model = PSM_DH_Model();
 [x0,J0] = FK_Jacob_Geometry(PSM_q0,PSM_Model.DH, PSM_Model.tip, PSM_Model.method);
-
+R = [-1 0 0;
+     0  -1 0;
+     0   0  1];
+ 
 d_size = size(mtm_x);
-for i = 1:d_size(3)-1
+for i = 2:d_size(3)
+    mtm_xt = mtm_x(:,:,i);
+    mtm_xt_1 = mtm_x(:,:,i-1);
+    
     qt = PSM_q(:,end);
     [xt,Jt] = FK_Jacob_Geometry(qt,PSM_Model.DH, PSM_Model.tip, PSM_Model.method);
     xd_t = MTM_to_PSM_Mapping(mtm_x(:,:,i));
     [xe_t, delta_theta] = T_Error(xt,xd_t);
-    vd_t = psm_xdot_dsr(:,i);
+    [mtm_v_t, delta_theta] = T_Error(mtm_xt,mtm_xt_1);
+    vd_t = [R*mtm_v_t(1:3);R*mtm_v_t(4:6)];
+%     vd_t = psm_xdot_dsr(:,i);
     qdot_t = Inv_Jacob_Control(xe_t, vd_t, Jt, lambda);
     PSM_q = [PSM_q, qt+qdot_t*time_delta];
-    if(mod(i,50) == 0)
-        MTM_graphical(xt(1:3,1:3), xt(1:3,4),i);
+    if(mod(i,10) == 0)
+        endpose_graphical(xt(1:3,1:3), xt(1:3,4),i);
     end
+%     endpose_graphical(xt(1:3,1:3), xt(1:3,4),i);
     if(i == d_size(3)-1)
         i = d_size(3)-1;
     end
@@ -32,7 +44,7 @@ MTM_Final = mtm_x(:,:,i);
 d_size = size(psm_x_dsr);
 for i = 1:d_size(3)
     if(mod(i,50) == 0)
-        MTM_graphical(psm_x_dsr(1:3,1:3,i), psm_x_dsr(1:3,4,i),i);
+        endpose_graphical(psm_x_dsr(1:3,1:3,i), psm_x_dsr(1:3,4,i),i);
         %pause(0.5);
     end
 end

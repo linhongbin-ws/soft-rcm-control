@@ -1,8 +1,11 @@
-function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
+function [T_a,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method,is_Ts)
 % calculate tip homongenous matrix and jacobian matrix using geometry
 % method
-
+    Ts = [];
+    
+    
     T = eye(4);
+    Ts = cat(3, Ts, T);
     dh_size = size(table);
 
     Jacob_ori = [0;0;1];
@@ -20,11 +23,13 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
             if type == 1
                 theta = theta + q(i);
                 T = T*DHtransform(theta,d,a,alpha,method);
+                Ts = cat(3, Ts, T);
                 z_axis = [z_axis,T(1:3,3)]; 
                 p_pos = [p_pos,T(1:3,4)];
             elseif type ==2
                 d = d + q(i);
                 T= T*DHtransform(theta,d,a,alpha,method);
+                Ts = cat(3, Ts, T);
                 z_axis = [z_axis,T(1:3,3)];
                 p_pos = [p_pos,T(1:3,4)];
             else
@@ -36,7 +41,7 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
     elseif strcmp(method, "URDF")
         rev_idx = 0; % reverse index
         for i=1:size(table, 1)
-            type = table(i, 1)
+            type = table(i, 1);
             x = table(i, 2);  y = table(i, 3); z = table(i, 4);
             rotx = table(i,5); roty = table(i,6); rotz = table(i,7);
             if type == 1
@@ -50,6 +55,7 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
             end
             
             T = T*URDFtransform(x,y,z, rotx, roty, rotz);
+           Ts = cat(3, Ts, T);
             if type~=0
                 z_axis = [z_axis,T(1:3,3)]; 
                 p_pos = [p_pos,T(1:3,4)];
@@ -70,6 +76,7 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
  
     %Tranform from last joint frame to tip frame
     T = T*Tip_T;
+   Ts = cat(3, Ts, T);
     p_pos = [p_pos,T(1:3,4)];
     
     
@@ -85,4 +92,9 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
           Jacobian = [Jacobian,[z_axis(:,i);zeros(3,1)]];
        end
     end
+   if is_Ts
+       T_a = Ts; 
+   else
+       T_a = Ts(:,:, end);
+   end
 end

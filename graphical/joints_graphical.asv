@@ -1,8 +1,8 @@
-function endpose_graphical(R,t,i)
+function joints_graphical(Ts, xlims, ylims, zlims)
     persistent chain;
-    frame_length = 0.05;
-    frame_width = 1;
-    frame_thick = 0.05;
+    frame_length = 0.15;
+    frame_width = 0.6;
+    frame_thick = 0.03;
     lim_Max = 0.3;
     foundFig=findobj('Tag','MTM_Fast_Plot');
     patch_length = 0.07;
@@ -23,14 +23,17 @@ function endpose_graphical(R,t,i)
 
         
         %First Plot
-        T = rt2tr(R,t);
-        T_origin=eye(4,4);
-        title(sprintf('The position: x:%.4f, y:%.4f, z:%.4f',t(1,1),t(2,1),t(3,1)));
+%         T = rt2tr(R,t);
+%         T_origin=eye(4,4);
+%         title(sprintf('The position: x:%.4f, y:%.4f, z:%.4f',t(1,1),t(2,1),t(3,1)));
         set(gca,'SortMethod', 'childorder')
 %         set(gca,'DrawMode','fast');
+
+
 %         plot_link = plot3(hax,[T_origin(1,4),t(1,1)],[T_origin(2,4),t(2,1)],[T_origin(3,4),t(3,1)],'k','LineWidth',2);
         plot_patch = patch(hax,patch_length*[-1,1,1,-1],patch_length*[1,1,-1,-1],[0,0,0,0],[0.859,0.859,0.859]);
-        plot_base = trplot(T_origin,hax,'length',frame_length,'arrow','width', frame_width,'thick',frame_thick,'rgb');
+%         set(plot_link,'Parent',chain);
+%         plot_base = trplot(T_origin,hax,'length',frame_length,'arrow','width', frame_width,'thick',frame_thick,'rgb');
 %         plot_tip = trplot(T,hax,'length',frame_length,'arrow','width', frame_width,'thick',frame_thick,'rgb');
 %         chain=hggroup;
 %         set(plot_link,'Parent',chain);
@@ -42,22 +45,26 @@ function endpose_graphical(R,t,i)
   if ~isempty(chain)
     delete(chain);
   end
-
-    T = rt2tr(R,t);
-    T_origin=eye(4,4);
-    plot_link = plot3(hax,[T_origin(1,4),t(1,1)],[T_origin(2,4),t(2,1)],[T_origin(3,4),t(3,1)],'k','LineWidth',2);
-    %plot_patch = patch(hax,[-0.5,0.5,0.5,-0.5],[0.5,0.5,-0.5,-0.5],[0,0,0,0],[0.859,0.859,0.859]);
-    %plot_base = trplot(T_origin,hax,'length',1,'arrow','width', 1.5,'thick',2,'rgb');
-    plot_tip = trplot(T,hax,'length',frame_length,'arrow','width', frame_width,'thick',frame_thick,'rgb');
+  
     chain=hggroup;
-    set(plot_link,'Parent',chain);
-    %set(plot_patch,'Parent',chain);
-    %set(plot_base,'Parent',chain);
-    set(plot_tip,'Parent',chain);
-    title(sprintf('The position: x:%.3f, y:%.3f, z:%.3f, index %d',t(1,1),t(2,1),t(3,1),i));
+    if Ts == 
+    for i=1:size(Ts,3)
+        T = Ts(:,:,i);
+        if i~=1
+            Tp = Ts(:,:,i-1);
+            plot_link = plot3(hax,[Tp(1,4) T(1,4)],[Tp(2,4) T(2,4)],[Tp(3,4) T(3,4)],'k','LineWidth',2);
+            set(plot_link,'Parent',chain);
+        end
+        plot_T = trplot(T,hax,'length',frame_length,'labels','   ' ,'arrow','width', frame_width,'thick',frame_thick,'rgb');
+        set(plot_T,'Parent',chain);
+    end
+
+%     title(sprintf('The position: x:%.3f, y:%.3f, z:%.3f, index %d',t(1,1),t(2,1),t(3,1),i));
     drawnow;
-    axis 'auto xzy'
     margin_scale = 1.3;
+    xlim(xlims)
+    ylim(ylims)
+    zlim(zlims)
 %     xlim([-abs(T(1,4)), abs(T(1,4))] *margin_scale);
 %     ylim([-abs(T(2,4)), abs(T(2,4))] *margin_scale);
 %     zlim([-abs(T(3,4)), abs(T(3,4))] *margin_scale);
