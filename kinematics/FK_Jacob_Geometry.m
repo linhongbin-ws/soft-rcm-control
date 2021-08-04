@@ -1,38 +1,69 @@
-function [T,Jacobian] = FK_Jacob_Geometry(q,dh_table,Tip_T,DH_method)
-% return position of center of mass of ith link
+function [T,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method)
+% calculate tip homongenous matrix and jacobian matrix using geometry
+% method
+
     T = eye(4);
-    dh_size = size(dh_table);
+    dh_size = size(table);
 
     Jacob_ori = [0;0;1];
     z_axis = [0;0;1];
     p_pos = [0;0;0];
-    for i=1:dh_size(1)
-        theta = dh_table(i,5);
-        d = dh_table(i,4);
-        a = dh_table(i,3);
-        alpha = dh_table(i,2);
-        type = dh_table(i,1);
-        if type == 1
-            theta = theta + q(i);
-            T = T*DHtransform(theta,d,a,alpha,DH_method);
-            z_axis = [z_axis,T(1:3,3)]; 
-            p_pos = [p_pos,T(1:3,4)];
-        elseif type ==2
-            d = d + q(i);
-            T= T*DHtransform(theta,d,a,alpha,DH_method);
-            z_axis = [z_axis,T(1:3,3)];
-            p_pos = [p_pos,T(1:3,4)];
-        else
-            msg = sprintf('Encounter a known Joint Type %d, it must be 1 or 2',type);
-            error(msg);
-        end    
+    
+    % calcuate forward kinematics
+    if strcmp(method, "DH_Standard") || strcmp(method, "DH_Modified") 
+        for i=1:dh_size(1)
+            theta = table(i,5);
+            d = table(i,4);
+            a = table(i,3);
+            alpha = table(i,2);
+            type = table(i,1);
+            if type == 1
+                theta = theta + q(i);
+                T = T*DHtransform(theta,d,a,alpha,method);
+                z_axis = [z_axis,T(1:3,3)]; 
+                p_pos = [p_pos,T(1:3,4)];
+            elseif type ==2
+                d = d + q(i);
+                T= T*DHtransform(theta,d,a,alpha,method);
+                z_axis = [z_axis,T(1:3,3)];
+                p_pos = [p_pos,T(1:3,4)];
+            else
+                msg = sprintf('Encounter a known Joint Type %d, it must be 1 or 2',type);
+                error(msg);
+            end    
+        end
+        
+    elseif strcmp(method, "URDF")
+        rev_idx = 0; % reverse index
+        for i=1:size(table, 1)
+            type = table(i, 1)
+            x = table(i, 2);  y = table(i, 3); z = table(i, 4);
+            rotx = table(i,5); roty = table(i,6); rotz = table(i,7);
+            if type == 1
+                rotz = rotz + q(i-rev_idx);
+            elseif type ==2
+                z = z + q(i-rev_idx);
+            elseif type ==0
+                rev_idx=rev_idx+1;
+            else
+                error('not support type')
+            end
+            
+            T = T*URDFtransform(x,y,z, rotx, roty, rotz);
+            if type~=0
+                z_axis = [z_axis,T(1:3,3)]; 
+                p_pos = [p_pos,T(1:3,4)];
+            end
+        end        
+    else
+        error("not support method")
     end
     
      Jacobian = [];
-    if DH_method == 'Standard'
+    if strcmp(method, "DH_Standard")
         z_axis = z_axis(:,1:end-1);
         p_pos = p_pos(:,1:end-1);
-    elseif DH_method == 'Modified'
+    elseif  strcmp(method, "DH_Modified") || strcmp(method, "URDF")
         z_axis = z_axis(:,2:end);
         p_pos = p_pos(:,2:end);
     end
@@ -42,10 +73,13 @@ function [T,Jacobian] = FK_Jacob_Geometry(q,dh_table,Tip_T,DH_method)
     p_pos = [p_pos,T(1:3,4)];
     
     
-
-    for i=1:dh_size(1)
-       type = dh_table(i,1);
-       if type == 1
+    rev_idx = 0; % reverse index
+    for j=1:size(table, 1)
+       type = table(j,1);
+       i = j-rev_idx;
+       if type == 0
+           rev_idx = rev_idx +1;
+       elseif type == 1
           Jacobian = [Jacobian,[cross(z_axis(:,i),p_pos(:,end)-p_pos(:,i));z_axis(:,i)]];
        elseif type ==2
           Jacobian = [Jacobian,[z_axis(:,i);zeros(3,1)]];

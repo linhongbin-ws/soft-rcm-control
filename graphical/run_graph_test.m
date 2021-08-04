@@ -10,14 +10,14 @@
 % end
 
 
-fprintf("===========PSM plot test==========\n")
-global PSM_Model
-PSM_Model = PSM_DH_Model()
-q0 = [0 0 0 0 0 0].';
-for index =1:1:100
-    i = index/100;
-    q0 = sin(i*1) * ones(size(q0)) + q0;
-    PSM_graphical(q0);
-    pause(0.09);
-end
+% fprintf("===========PSM plot test==========\n")
+% global PSM_Model
+% PSM_Model = PSM_DH_Model()
+% q0 = [0 0 0 0 0 0].';
+% for index =1:1:100
+%     i = index/100;
+%     q0 = sin(i*1) * ones(size(q0)) + q0;
+%     PSM_graphical(q0);
+%     pause(0.09);
+% end
 

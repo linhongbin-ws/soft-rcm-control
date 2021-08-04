@@ -3,7 +3,7 @@ function m = MTM_DH_Model()
     m.l_forearm = 0.3048+0.0597;
     m.h = 0.1506;
     
-    m.method = 'Standard';
+    m.method = 'DH_Standard';
     m.DH = [
         % type   alpha   a           d       theta
         %=====================================

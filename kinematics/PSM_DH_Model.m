@@ -1,5 +1,5 @@
 function m = PSM_DH_Model()
-    m.method = 'Modified';
+    m.method = 'DH_Modified';
     m.l_RCC = 0.4318; 
     m.l_tool = 0.4162;
     m.l_pitch2yaw = 0.0091;
