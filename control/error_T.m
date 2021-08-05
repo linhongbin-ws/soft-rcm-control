@@ -1,4 +1,4 @@
-function [err, theta] = T_Error(T_act, T_dsr)
+function [err, theta] = error_T(T_act, T_dsr)
 
     [ori_dsr, tran_dsr] = tr2rt(T_dsr);
     [ori_act, tran_act] = tr2rt(T_act);

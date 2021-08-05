@@ -1,4 +1,4 @@
-function [T_a,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method,is_Ts)
+function [T_a,Jacobian] = fk_geom(q,table,Tip_T,method,is_Ts)
 % calculate tip homongenous matrix and jacobian matrix using geometry
 % method
     Ts = [];
@@ -22,13 +22,13 @@ function [T_a,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method,is_Ts)
             type = table(i,1);
             if type == 1
                 theta = theta + q(i);
-                T = T*DHtransform(theta,d,a,alpha,method);
+                T = T*dh_transform(theta,d,a,alpha,method);
                 Ts = cat(3, Ts, T);
                 z_axis = [z_axis,T(1:3,3)]; 
                 p_pos = [p_pos,T(1:3,4)];
             elseif type ==2
                 d = d + q(i);
-                T= T*DHtransform(theta,d,a,alpha,method);
+                T= T*dh_transform(theta,d,a,alpha,method);
                 Ts = cat(3, Ts, T);
                 z_axis = [z_axis,T(1:3,3)];
                 p_pos = [p_pos,T(1:3,4)];
@@ -42,22 +42,26 @@ function [T_a,Jacobian] = FK_Jacob_Geometry(q,table,Tip_T,method,is_Ts)
         rev_idx = 0; % reverse index
         for i=1:size(table, 1)
             type = table(i, 1);
-            x = table(i, 2);  y = table(i, 3); z = table(i, 4);
-            rotx = table(i,5); roty = table(i,6); rotz = table(i,7);
+            urdfs = table(i,2:7);
             if type == 1
-                rotz = rotz + q(i-rev_idx);
-            elseif type ==2
-                z = z + q(i-rev_idx);
+                urdfs(table(i,8)+3) =  urdfs(table(i,8)+3) +  q(i-rev_idx); % plus 3 to move to angle index
+            elseif  type ==2
+                urdfs(table(i,8)) =  urdfs(table(i,8)) +  q(i-rev_idx); % plus 3 to move to angle index
+%                 x = table(i, 2);  y = table(i, 3); z = table(i, 4);
+%                 rotx = tmp(); roty = table(i,6); rotz = table(i,7);
+%                 rotz = rotz + q(i-rev_idx);
+%             elseif type ==2
+%                 z = z + q(i-rev_idx);
             elseif type ==0
                 rev_idx=rev_idx+1;
             else
                 error('not support type')
             end
             
-            T = T*URDFtransform(x,y,z, rotx, roty, rotz);
+            T = T*urdf_transform(urdfs(1), urdfs(2), urdfs(3), urdfs(4), urdfs(5), urdfs(6));
            Ts = cat(3, Ts, T);
             if type~=0
-                z_axis = [z_axis,T(1:3,3)]; 
+                z_axis = [z_axis,T(1:3,table(i,8))];  % moving axis can be x, y,z, which defined by table(i,8)
                 p_pos = [p_pos,T(1:3,4)];
             end
         end        

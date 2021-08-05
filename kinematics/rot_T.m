@@ -1,4 +1,4 @@
-function T = rot(theta,ax)
+function T = rot_T(theta,ax)
 % take value in radian and standard axis of rotation (x,y,z)
 % and return 4x4 homogeneous transformation matrix of this pure rotation
 T = zeros(4);

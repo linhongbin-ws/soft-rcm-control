@@ -1,4 +1,4 @@
-function PSM_T = MTM_to_PSM_Mapping(MTM_T)
+function PSM_T = map_MTM2PSM(MTM_T)
     psm_pos_ref = [0;0;-0.1773];
     mtm_pos_ref = [-0.0001;-0.3639;-0.1414];
     R = [-1 ,0, 0
