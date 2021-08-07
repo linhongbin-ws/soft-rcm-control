@@ -6,7 +6,7 @@ load(fullfile( '..','data','dvrk_mtm_psm.mat'))
 q0_slave = deg2rad([30;30;30;30;30;30;30]);
 time_delta = 0.01; % 100hz
 loops_per_plots = 30;
-lambda = 1/time_delta;
+lambda = 0.0001;
 duration = 5;
 % map_R = [1 0 0;
 %      0  1 0;
@@ -18,6 +18,7 @@ map_R = [];
 arms_offsets = [0,0.5,0];
 transl_scale = 0.5;
 lamda_rcm0 = 0.5;
+tracking_gain = 200;
 
 model_slave = model_Flexiv_with_stick();
 Ts_master = mtm_x;
@@ -35,25 +36,34 @@ lamda_rcm = lamda_rcm0;
 qdott_slave = zeros(7,1);
 rcm_ps = [];
 ds = [];
-for i = 2:size(Ts_master, 3)
+error_norms = [];
+for i = 1:size(Ts_master, 3)
     % get current state
     qt_slave = qs_slave(:,end);
     Tt_master = Ts_master(:,:,i);
-    Tt_mns_1_master = Ts_master(:,:,i-1);
+    if i == 1
+        Tt_mns_1_master = Ts_master(:,:,1);
+    else
+        Tt_mns_1_master = Ts_master(:,:,i-1);
+    end
     [Tt_slave_jnts, Jt_slave_s] =fk_geom(qt_slave, model_slave.table, model_slave.tip, model_slave.method, true, [model_slave.rcm_top_jnt_idx, model_slave.rcm_tip_jnt_idx]);
     Tt_slave = Tt_slave_jnts(:,:,end);
     
     % update lamda_rcm
     rcm_top_T = Tt_slave_jnts(:,:,model_slave.rcm_top_jnt_idx+1);
+    rcm_tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
+    stick_length = norm(rcm_tip_T(1:3,4) - rcm_top_T(1:3,4));
     rcm_top_jacob = Jt_slave_s(:,:,2) ;
-    zv = dot(rcm_top_jacob(1:3,:)*qdott_slave,  rcm_top_T(1:3,3));
-    lamda_rcm  =lamda_rcm - zv * time_delta;
-    rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_Tip_T(1:3,4)*lamda_rcm;
+    rcm_tip_jacob = Jt_slave_s(:,:,3) ;
+    rcm_jacob = rcm_top_jacob * (1-lamda_rcm) + rcm_tip_jacob*lamda_rcm;
+    zv = dot(rcm_jacob(1:3,:)*qdott_slave,  rcm_top_T(1:3,3));
+    lamda_rcm  =lamda_rcm - (zv * time_delta)/stick_length;
+    rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_tip_T(1:3,4)*lamda_rcm;
     rcm_ps = cat(3, rcm_ps, rcm_p);
     vec = rcm_ps(:,:,end) - rcm_ps(:,:,1);
-    ds = [ds, sqrt(dot(vec, vec))];
+    ds = [ds, norm(vec)];
     
-    if(mod(i,loops_per_plots) == 2)
+    if(mod(i,loops_per_plots) == 1)
 %         joints_render(Tt_slave, xlims, ylims, zlims); % visualize
          rcm_Tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
          rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_Tip_T(1:3,4)*lamda_rcm;
@@ -73,14 +83,16 @@ for i = 2:size(Ts_master, 3)
     
 %     vt_slave = control_inv_jacob_redundant(Tt_err_slave, vt_dsr_slave, Jt_slave, lambda, zeros(7,1)); % inverse jacobian control for redundant robot
 %      vt_slave = control_inv_jacob_rdd_pos(Tt_err_slave, vt_dsr_slave, Jt_slave, lambda, zeros(7,1)); % inverse jacobian control for redundant robot
-    qdott_slave = control_inv_jacob_rdd_pos_rcm(Tt_err_slave, vt_dsr_slave, Jt_slave_s(:,:,1), H, lambda, zeros(7,1)); % inverse jacobian control for redundant robot
-     
+    [qdott_slave, error_norm] = control_inv_jacob_rdd_pos_rcm(Tt_err_slave, vt_dsr_slave, Jt_slave_s(:,:,1), H, lambda, zeros(7,1), tracking_gain); % inverse jacobian control for redundant robot
+     error_norms = [error_norms, error_norm];
     qs_slave(:,end) = [qt_slave+qdott_slave*time_delta]; % step velocity in simulation
     
 
 end
-figure(2)
+figure()
 plot(ds)
+figure()
+plot(error_norms)
 
 
 
