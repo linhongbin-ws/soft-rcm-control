@@ -1,4 +1,4 @@
-function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_offsets, isOnlyTipFrame)
+function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_offsets, rcm_p, isOnlyTipFrame)
     persistent chain;
     frame_length = 0.15;
     frame_width = 0.3;
@@ -70,10 +70,18 @@ function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_of
             set(plot_T,'Parent',chain);
          end
     end
+    
+    if ~isempty(rcm_p)
+        pp = rcm_p +arms_offsets.';
+        plot_rcm = scatter3([pp(1)], [pp(2)], [pp(3)],...
+        'MarkerEdgeColor','k',...
+        'MarkerFaceColor',[0 .75 .75]);
+        set(plot_rcm,'Parent',chain);
+    end
 
 
     drawnow;
-    margin_scale = 1.3;
+%     margin_scale = 1.3;
     xlim(xlims)
     ylim(ylims)
     zlim(zlims)

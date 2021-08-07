@@ -87,9 +87,9 @@ function [T_a,J_a] = fk_geom(q,table,Tip_T,method,is_Ts, jacob_jnts)
    if  isempty(jacob_jnts)
        J_a = Jacobian;
    else 
-       J_a = [Jacobian]
+       J_a = [Jacobian];
        for k = jacob_jnts
-           Jacobian = jacob(table, z_axis, p_pos,  k, Ts(:,:,k));
+           Jacobian = jacob(table, z_axis, p_pos,  k, Ts(:,:,k+1));
            J_a = cat(3, J_a, Jacobian);
        end
    end
@@ -117,15 +117,23 @@ end
 function Jacobian = jacob(table, z_axis, p_pos,  table_rows_Jacob, T_Jacob)
     Jacobian = [];
     rev_idx = 0; % reverse index
-    for j=1:table_rows_Jacob
+    for j=1:size(table,1)
        type = table(j,1);
        i = j-rev_idx;
        if type == 0
            rev_idx = rev_idx +1;
        elseif type == 1
-          Jacobian = [Jacobian,[cross(z_axis(:,i),T_Jacob(1:3,4)-p_pos(:,i));z_axis(:,i)]];
+          if j>table_rows_Jacob
+             Jacobian = [Jacobian,zeros(6,1)];
+          else
+            Jacobian = [Jacobian,[cross(z_axis(:,i),T_Jacob(1:3,4)-p_pos(:,i));z_axis(:,i)]];
+          end
        elseif type ==2
-          Jacobian = [Jacobian,[z_axis(:,i);zeros(3,1)]];
+         if j>table_rows_Jacob
+             Jacobian = [Jacobian,zeros(6,1)];
+         else
+                Jacobian = [Jacobian,[z_axis(:,i);zeros(3,1)]];
+         end
        end
     end
 end
