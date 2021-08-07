@@ -16,13 +16,13 @@ map_R = [];
  ylims = [-0.5 1];
  zlims = [-0.5 2.5];
 arms_offsets = [0,0.5,0];
-transl_scale = 0.1;
+transl_scale = 0.1
 
 model_slave = model_Flexiv();
 Ts_master = mtm_x;
 
 % telep tracking control
-[T0_slave,~] = fk_geom(q0_slave,model_slave.table, model_slave.tip, model_slave.method,false,[]);
+[T0_slave,~] = fk_geom(q0_slave,model_slave.table, model_slave.tip, model_slave.method,false);
 qs_slave = [q0_slave];
 T0_master = mtm_x(:,:,1);
 
@@ -35,7 +35,7 @@ for i = 2:size(Ts_master, 3)
     qt_slave = qs_slave(:,end);
     Tt_master = Ts_master(:,:,i);
     Tt_mns_1_master = Ts_master(:,:,i-1);
-    [Tt_slave_jnts, Jt_slave] =fk_geom(qt_slave, model_slave.table, model_slave.tip, model_slave.method, true, []);
+    [Tt_slave_jnts, Jt_slave_s] =fk_geom(qt_slave, model_slave.table, model_slave.tip, model_slave.method, true, [model_slave.rcm_top_jnt_idx, model_slave.rcm_tip_jnt_idx]);
     Tt_slave = Tt_slave_jnts(:,:,end);
     
     if(mod(i,loops_per_plots) == 2)
@@ -49,6 +49,8 @@ for i = 2:size(Ts_master, 3)
     
     [vel_master, ~] = error_T(Tt_master,Tt_mns_1_master);
     vt_dsr_slave = [map_R*vel_master(1:3);map_R*vel_master(4:6)]; % get desired velocity
+    
+    % calculate contrain jacobian
     
 %     vt_slave = control_inv_jacob_redundant(Tt_err_slave, vt_dsr_slave, Jt_slave, lambda, zeros(7,1)); % inverse jacobian control for redundant robot
      vt_slave = control_inv_jacob_rdd_pos(Tt_err_slave, vt_dsr_slave, Jt_slave, lambda, zeros(7,1)); % inverse jacobian control for redundant robot

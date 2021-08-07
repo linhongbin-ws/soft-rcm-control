@@ -1,4 +1,4 @@
-function T = dh_transform(theta,d,a,alpha,method)
+ function T = dh_transform(theta,d,a,alpha,method)
 %take in four standard DH parameters between two consecutive frames and 
 %return 4x4 homogeneous intermediate transformation matrix between
 %the links

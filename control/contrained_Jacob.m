@@ -1,0 +1,1 @@
+function H = contrained_Jacob(T_rcm_top, T_tip_top, J_rcm_top, J_rcm_tip)
