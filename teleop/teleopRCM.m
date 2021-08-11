@@ -75,12 +75,12 @@ classdef teleopRCM < handle
 
         function obj = teleopRCM()  % Constructor
 
-            obj.idle_topics()
+            obj.topics('idle')
         end
         
         function master_cb(obj, transform)
-            rotm = quat2rotm(transform.rotation);
-            posv = transform.position;
+            rotm = quat2rotm([transform.Rotation.X transform.Rotation.Y transform.Rotation.Z transform.Rotation.W]);
+            posv = [transform.Translation.X; transform.Translation.Y; transform.Translation.Z];
             if ~isempty(obj.Tt_master)
                 obj.Tt_mns_1_master = obj.Tt_master;
             end
@@ -95,49 +95,50 @@ classdef teleopRCM < handle
         function slave_teleop_cb(obj,q)
             obj.qt_slave = q;
             obj.run(q);
-            obj.qt_slave_dsr
-            obj.psm_js_publisher.send(obj.jointStateMsg);
+        
+            msg = rosmessage(obj.pub_slave);
+            msg.Position = obj.qt_slave_dsr;
+            obj.pub_slave.send(msg);
+            
+            msg = rosmessage(obj.pub_slave_wrist);
+            msg.Position = obj.qt_slave_wrist_dsr;
+            obj.pub_slave_wrist.send(msg);
         end
 
         
-        function idle_topics(obj)
+        function topics(obj, state)
             if obj.dvrk_version == 2
 
                 % master subscribe
-                sub_master_cb = @(src,msg)(obj.master_cb(msg.transform));
+                sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
                 obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
         
                 % slave subscribe
-                sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.position));
-                obj.sub_slave = rossubscriber('/dvrk/MTML/state_joint_current',sub_slave_idle_cb,'BufferSize',2);
+                sub_slave_wrist_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
+                obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
                 
                 % slave publish
-                obj.pub_slave = rospublisher('xxx','std_msgs/JointState');
-                obj.pub_slave_wrist = rospublisher('xxxa','std_msgs/JointState');
+                obj.pub_slave = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
+                obj.pub_slave_wrist = rospublisher('/flexiv_set_js','sensor_msgs/JointState');
+                
+                if strcmp(state, 'idle')
+                    % slave subscribe
+                    sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
+                    obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_idle_cb,'BufferSize',2);
+                    
+                elseif strcmp(state, 'teleop')
+                    % slave subscribe
+                    sub_slave_teleop_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
+                    obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_teleop_cb,'BufferSize',2);
+                else
+                    error('not support')
+                end
                 
             else
                 error('not support')
             end
         end
         
-        function teleop_topics(obj)
-            if obj.dvrk_version == 2
-
-                % master subscribe
-                sub_master_cb = @(src,msg)(obj.master_cb(msg.transform));
-                obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
-        
-                % slave subscribe
-                sub_slave_teleop_cb = @(src,msg)(obj.master_cb(msg.position));
-                obj.sub_slave = rossubscriber('/dvrk/MTML/state_joint_current',sub_slave_teleop_cb,'BufferSize',2);
-                
-                % slave publish
-                obj.pub_slave = rospublisher('xxx','std_msgs/JointState');
-                obj.pub_slave_wrist = rospublisher('xxxa','std_msgs/JointState');
-            else
-                error('not support')
-            end
-        end
         
         function reset(obj)
             obj.rcm_p = [];
@@ -155,12 +156,13 @@ classdef teleopRCM < handle
         end
         
         function start_teleop(obj)
+            obj.reset()
             obj.is_initial_loop_teleop = true;
-            obj.teleop_topics();
+            obj.topics('teleop');
         end
         
         function stop_teleop(obj)
-            obj.idle_topics();
+             obj.topics('idle');
         end
 
 
