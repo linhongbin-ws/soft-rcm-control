@@ -1,6 +1,7 @@
 % load simulated data
 load(fullfile( '..','data','dvrk_mtm_psm.mat'))
 
+addpath(genpath(fullfile('..','..','soft-rcm-control')))
 %%  params
 
 %%% general
@@ -111,8 +112,8 @@ for i = 1:size(Ts_master, 3)
     vt_dsr_slave = [map_R*vel_master(1:3);map_R*vel_master(4:6)]; % get desired velocity
     
 %     iTt_slave = inv(Tt_slave);
-    tmp = map_MTM2Flexiv(Tt_master, map_R, T0_master, T0_slave_tip, transl_scale);
-    [tmp, ~] = error_T(Tt_slave_jnts_all(:,:,end),tmp); % get positional error
+%     tmp =         map_MTM2Flexiv(Tt_master, map_R, T0_master, T0_slave_tip, transl_scale);
+    [tmp, ~] = error_T(Tt_slave_jnts_all(:,:,end), Tt_slave_dsr); % get positional error
     Tt_err_slave_wrist = [Tt_slave(1:3,1:3).'*tmp(1:3,:);Tt_slave(1:3,1:3).'*tmp(4:6,:)];
     vt_dsr_slave_wrist = [Tt_slave(1:3,1:3).'*vt_dsr_slave(1:3,:);Tt_slave(1:3,1:3).'*vt_dsr_slave(4:6,:)];
 
