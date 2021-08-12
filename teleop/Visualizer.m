@@ -56,6 +56,7 @@ classdef Visualizer < handle
     rcm_p
     map_R 
     T0_slave_tip
+    sub_lamda_rcm
 
   end
 
@@ -79,10 +80,11 @@ classdef Visualizer < handle
         
         function slave_cb(obj, q)
             obj.qt_slave = q;
+            
         end
         
         function slave_wrist_cb(obj, q)
-            obj.qt_slave = q;
+            obj.qt_slave_wrist = q;
         end
         
         function slave_lamda_rcm_cb(obj, lamda)
@@ -105,9 +107,10 @@ classdef Visualizer < handle
                 sub_slave_cb = @(src,msg)(obj.slave_cb(msg.Position));
                 obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_cb,'BufferSize',2);
                 
+                
                 % slave subscribe
                 sub_lamda_rcm_cb = @(src,msg)(obj.slave_lamda_rcm_cb(msg.Data));
-                obj.sub_slave = rossubscriber('/flexiv_lamda_rcm',sub_lamda_rcm_cb,'BufferSize',2);
+                obj.sub_lamda_rcm = rossubscriber('/flexiv_lamda_rcm',sub_lamda_rcm_cb,'BufferSize',2);
                     
             else
                 error('not support')
@@ -125,7 +128,8 @@ classdef Visualizer < handle
                 tmp = cat(3, tmp, obj.Tt_slave*obj.Tt_slave_wrist_jnts(:,:,k));
             end
             obj.Tt_slave_jnts_all = tmp;
-
+            
+            rcm_top_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_top_jnt_idx+1);
             rcm_Tip_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_tip_jnt_idx+1);
             obj.rcm_p = rcm_top_T(1:3,4)*(1-obj.lamda_rcm) + rcm_Tip_T(1:3,4)*obj.lamda_rcm;
             joints_render_master_slave(obj.Tt_master, obj.Tt_slave_jnts_all, obj.xlims, obj.ylims, obj.zlims, obj.arms_offsets, obj.rcm_p, true); % visualize
