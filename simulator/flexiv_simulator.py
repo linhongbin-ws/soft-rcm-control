@@ -1,7 +1,8 @@
 import rospy
 from sensor_msgs.msg import JointState
+import numpy as np
 
-q = [0, 0, 0, 0, 0, 0, 0]
+q = np.deg2rad([0,-15,0,-75,0,90,-45])
 q_wrist = [0, 0, 0]
 
 def flexiv_cb(data):

@@ -13,7 +13,7 @@ classdef teleopRCM < handle
     loops_per_plots = 10; % render every n control loop
 
     %%% control
-    transl_scale = 0.5; %mapping scale for translation
+    transl_scale = 0.2; %mapping scale for translation
     lamda_rcm0 = 0.5; %set inital rcm point with lamda
     tracking_gain_transl = 200; %control gain for tracking PD control
     lambda_transl = 0.0001; % lamda = D/P, D=velocity gain, P=position gain
@@ -24,11 +24,11 @@ classdef teleopRCM < handle
     %%% kinematics
     model_slave = model_Flexiv_with_stick();
     model_slave_wrist = model_instrument();
-    q0_slave = deg2rad([30;30;30;30;30;30;30]); % slave intial q
+    q0_slave = deg2rad([0;-15;0;-75;0;90;-45]);
     q0_slave_wrist =  deg2rad([0,0,0].'); 
     
     %%% dvrk version
-    dvrk_version = 2;
+    dvrk_version = 1;
     
     % variables
     qs_slave
@@ -86,6 +86,15 @@ classdef teleopRCM < handle
                 obj.Tt_mns_1_master = obj.Tt_master;
             end
             obj.Tt_master = [rotm, posv; zeros(1,3), 1];
+        end
+        
+        function master_cb1(obj, Pose)
+            rotm = quat2rotm([Pose.Orientation.X Pose.Orientation.Y Pose.Orientation.Z Pose.Orientation.W]);
+            posv = [Pose.Position.X; Pose.Position.Y; Pose.Position.Z];
+            if ~isempty(obj.Tt_master)
+                obj.Tt_mns_1_master = obj.Tt_master;
+            end
+            obj.Tt_master = [rotm, posv; zeros(1,3), 1];
 
         end
         
@@ -132,32 +141,42 @@ classdef teleopRCM < handle
                 % master subscribe
                 sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
                 obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
-        
-                % slave subscribe
-                sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
-                obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
-                
-                % slave publish
-                obj.pub_slave       = rospublisher('/flexiv_set_js','sensor_msgs/JointState');
-                obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
-                obj.pub_lamda_rcm = rospublisher('/flexiv_lamda_rcm','std_msgs/Float64');
-                
-                if strcmp(state, 'idle')
-                    % slave subscribe
-                    sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
-                    obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_idle_cb,'BufferSize',2);
-                    
-                elseif strcmp(state, 'teleop')
-                    % slave subscribe
-                    sub_slave_teleop_cb = @(src,msg)(obj.slave_teleop_cb(msg.Position));
-                    obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_teleop_cb,'BufferSize',2);
-                else
-                    error('not support')
-                end
-                
+            elseif  obj.dvrk_version == 1
+                sub_master_cb1 = @(src,msg)(obj.master_cb1(msg.Pose));
+                obj.sub_master = rossubscriber('/dvrk/MTML/position_cartesian_current',sub_master_cb1,'BufferSize',2);
             else
                 error('not support')
             end
+        
+            % slave subscribe
+            sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
+            obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
+
+            % slave publish
+            obj.pub_slave       = rospublisher('/flexiv_set_js','sensor_msgs/JointState');
+            obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
+            obj.pub_lamda_rcm = rospublisher('/flexiv_lamda_rcm','std_msgs/Float64');
+
+            if strcmp(state, 'idle')
+                % slave subscribe
+                sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
+                obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_idle_cb,'BufferSize',2);
+
+            elseif strcmp(state, 'teleop')
+                % slave subscribe
+                sub_slave_teleop_cb = @(src,msg)(obj.slave_teleop_cb(msg.Position));
+                obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_teleop_cb,'BufferSize',2);
+            else
+                error('not support')
+            end
+                
+
+        end
+        
+        function close(obj)
+            obj.sub_master.NewMessageFcn = @(a, b, c)[]; 
+            obj.sub_slave_wrist.NewMessageFcn = @(a, b, c)[];
+            obj.sub_slave.NewMessageFcn = @(a, b, c)[];
         end
         
         

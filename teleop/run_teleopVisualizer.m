@@ -1,8 +1,11 @@
 addpath(genpath(fullfile('..','..','soft-rcm-control')))
 visualizer = Visualizer();
 pause(0.5)
-duration = 30;
-for i = 1:round(duration/0.5)
+duration = 120;
+fprintf('start render\n')
+for i = 1:round(duration/0.2)
     visualizer.render()
 end
+fprintf('close render\n')
+visualizer.close()
 delete(visualizer)

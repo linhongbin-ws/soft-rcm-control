@@ -11,7 +11,7 @@ classdef Visualizer < handle
      zlims = [-0.5 2.5];
     arms_offsets = [0,0.5,0]; % master slave arm offset in the render figure
     loops_per_plots = 10; % render every n control loop
-    dvrk_version = 2
+    dvrk_version = 1
     
     %%% kinematics
     model_slave = model_Flexiv_with_stick();
@@ -78,6 +78,16 @@ classdef Visualizer < handle
 
         end
         
+        function master_cb1(obj, Pose)
+            rotm = quat2rotm([Pose.Orientation.X Pose.Orientation.Y Pose.Orientation.Z Pose.Orientation.W]);
+            posv = [Pose.Position.X; Pose.Position.Y; Pose.Position.Z];
+            if ~isempty(obj.Tt_master)
+                obj.Tt_mns_1_master = obj.Tt_master;
+            end
+            obj.Tt_master = [rotm, posv; zeros(1,3), 1];
+
+        end
+        
         function slave_cb(obj, q)
             obj.qt_slave = q;
             
@@ -93,28 +103,38 @@ classdef Visualizer < handle
 
         
         function topics(obj)
+
             if obj.dvrk_version == 2
 
                 % master subscribe
                 sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
                 obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
-        
-                % slave subscribe
-                sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
-                obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
-       
-                % slave subscribe
-                sub_slave_cb = @(src,msg)(obj.slave_cb(msg.Position));
-                obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_cb,'BufferSize',2);
-                
-                
-                % slave subscribe
-                sub_lamda_rcm_cb = @(src,msg)(obj.slave_lamda_rcm_cb(msg.Data));
-                obj.sub_lamda_rcm = rossubscriber('/flexiv_lamda_rcm',sub_lamda_rcm_cb,'BufferSize',2);
-                    
+            elseif  obj.dvrk_version == 1
+                sub_master_cb1 = @(src,msg)(obj.master_cb1(msg.Pose));
+                obj.sub_master = rossubscriber('/dvrk/MTML/position_cartesian_current',sub_master_cb1,'BufferSize',2);
             else
                 error('not support')
             end
+        
+            % slave subscribe
+            sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
+            obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
+
+            % slave subscribe
+            sub_slave_cb = @(src,msg)(obj.slave_cb(msg.Position));
+            obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_cb,'BufferSize',2);
+
+
+            % slave subscribe
+            sub_lamda_rcm_cb = @(src,msg)(obj.slave_lamda_rcm_cb(msg.Data));
+            obj.sub_lamda_rcm = rossubscriber('/flexiv_lamda_rcm',sub_lamda_rcm_cb,'BufferSize',2);
+                   
+        end
+        function close(obj)
+            obj.sub_master.NewMessageFcn = @(a, b, c)[]; 
+            obj.sub_slave_wrist.NewMessageFcn = @(a, b, c)[];
+            obj.sub_slave.NewMessageFcn = @(a, b, c)[];
+            obj.sub_lamda_rcm.NewMessageFcn = @(a, b, c)[];
         end
         
         function render(obj)

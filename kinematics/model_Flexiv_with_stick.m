@@ -17,7 +17,7 @@ function m = model_Flexiv_with_stick()
            1          0.02     -0.025   0.195      0             0                0                3;  % Joint5
            1          0.0         0.03     0.19       0             0                0                2;  % Joint6
            1         -0.055    0.070    0.11       0          -pi/2             0                3;  % Joint7
-           0          0               0    -0.172       pi/2        0                0                3;   % stick top
+           0          0               0    0.172       pi/2        -pi/4                0                3;   % stick top
            0          0               0    0.545        0             0                0                3;   % stick tip
            ];
    m.tip = eye(4);
