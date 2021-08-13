@@ -3,7 +3,8 @@
 function m = model_instrument()
    
     m.l_RCC = 0.4318; 
-    m.l_tool = 0.4162;
+%     m.l_tool = 0.4162;
+    m.l_tool = 0.0;
     m.l_pitch2yaw = 0.0091;
     m.l_yaw2ctrlpnt = 0.0102;
     

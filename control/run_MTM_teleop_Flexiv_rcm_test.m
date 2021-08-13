@@ -1,4 +1,5 @@
 % load simulated data
+clear all
 load(fullfile( '..','data','dvrk_mtm_psm.mat'))
 
 addpath(genpath(fullfile('..','..','soft-rcm-control')))
@@ -7,6 +8,10 @@ addpath(genpath(fullfile('..','..','soft-rcm-control')))
 %%% general
 time_delta = 0.01; % 100hz
 duration = 5;
+result_dir = fullfile('run')
+if ~exist(result_dir, 'dir')
+       mkdir(result_dir)
+end
 
 %%% graphical
  xlims = [-1.5 1.5];
@@ -14,13 +19,16 @@ duration = 5;
  zlims = [-0.5 2.5];
 arms_offsets = [0,0.5,0]; % master slave arm offset in the render figure
 loops_per_plots = 10; % render every n control loop
+mp4_file_dir = fullfile(result_dir, 'render');
+video = VideoWriter(mp4_file_dir);
+open(video)
 
 %%% control
 map_R = []; % empty if track current R
 transl_scale = 0.5; %mapping scale for translation
 lamda_rcm0 = 0.5; %set inital rcm point with lamda
-tracking_gain_transl = 200; %control gain for tracking PD control
-lambda_transl = 0.0001; % lamda = D/P, D=velocity gain, P=position gain
+tracking_gain_transl = 100; %control gain for tracking PD control
+lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
 tracking_gain_rot = 100; %control gain for tracking PD control
 lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
 
@@ -28,8 +36,12 @@ lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
 %%% kinematics
 model_slave = model_Flexiv_with_stick();
 model_slave_wrist = model_instrument();
-q0_slave = deg2rad([30;30;30;30;30;30;30]); % slave intial q
+q0_slave = deg2rad([0,-15,0,-75,0,90,-45].'); % slave intial q
 q0_slave_wrist =  deg2rad([0,0,0].'); 
+nPlane_i = [1;0;0];
+nPlane_m = [0;1;0];
+
+
 
 
 
@@ -57,6 +69,10 @@ rcm_ps = [];
 ds = [];
 error_transl_norms = [];
 error_rot_norms = [];
+rcm_p_fix = [];
+
+
+
 
 %%% use inital R as mapping R (one way to reduce rotational tracking error)
 if isempty(map_R)
@@ -83,26 +99,33 @@ for i = 1:size(Ts_master, 3)
     for k = 1:size(Tt_slave_wrist_jnts,3)
         Tt_slave_jnts_all = cat(3, Tt_slave_jnts_all, Tt_slave*Tt_slave_wrist_jnts(:,:,k));
     end
+     rcm_Top_T = Tt_slave_jnts(:,:,model_slave.rcm_top_jnt_idx+1);
+     rcm_Tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
+     rcm_p = rcm_Top_T(1:3,4)*(1-lamda_rcm) + rcm_Tip_T(1:3,4)*lamda_rcm;
+     if i == 1
+         rcm_p_fix = rcm_p;
+     end
+     %%% calculate lamda
+     lamda_rcm = norm(rcm_Top_T(1:3,4) - rcm_p_fix)/model_slave.stick_length;
+     ds = [ds, norm(rcm_p -rcm_p_fix)];
     
-    %%% update lamda_rcm
-    rcm_top_T = Tt_slave_jnts(:,:,model_slave.rcm_top_jnt_idx+1);
-    rcm_tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
-    stick_length = norm(rcm_tip_T(1:3,4) - rcm_top_T(1:3,4));
-    rcm_top_jacob = Jt_slave_s(:,:,2) ;
-    rcm_tip_jacob = Jt_slave_s(:,:,3) ;
-    rcm_jacob = rcm_top_jacob * (1-lamda_rcm) + rcm_tip_jacob*lamda_rcm;
-    zv = dot(rcm_jacob(1:3,:)*qdott_slave,  rcm_top_T(1:3,3));
-    lamda_rcm  =lamda_rcm - (zv * time_delta)/stick_length;
-    rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_tip_T(1:3,4)*lamda_rcm;
-    rcm_ps = cat(3, rcm_ps, rcm_p);
-    vec = rcm_ps(:,:,end) - rcm_ps(:,:,1);
-    ds = [ds, norm(vec)];
+%     %%% update lamda_rcm
+%     rcm_top_T = Tt_slave_jnts(:,:,model_slave.rcm_top_jnt_idx+1);
+%     rcm_tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
+%     stick_length = norm(rcm_tip_T(1:3,4) - rcm_top_T(1:3,4));
+%     rcm_top_jacob = Jt_slave_s(:,:,2) ;
+%     rcm_tip_jacob = Jt_slave_s(:,:,3) ;
+%     rcm_jacob = rcm_top_jacob * (1-lamda_rcm) + rcm_tip_jacob*lamda_rcm;
+%     zv = dot(rcm_jacob(1:3,:)*qdott_slave,  rcm_top_T(1:3,3));
+%     lamda_rcm  =lamda_rcm - (zv * time_delta)/stick_length;
+%     rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_tip_T(1:3,4)*lamda_rcm;
+%     rcm_ps = cat(3, rcm_ps, rcm_p);
+%     vec = rcm_ps(:,:,end) - rcm_ps(:,:,1);
+%     ds = [ds, norm(vec)];
     
     %%% plot render
-    if(mod(i,loops_per_plots) == 1)
-         rcm_Tip_T = Tt_slave_jnts(:,:,model_slave.rcm_tip_jnt_idx+1);
-         rcm_p = rcm_top_T(1:3,4)*(1-lamda_rcm) + rcm_Tip_T(1:3,4)*lamda_rcm;
-         joints_render_master_slave(Tt_master, Tt_slave_jnts_all, xlims, ylims, zlims, arms_offsets, rcm_p, true); % visualize
+    if(mod(i,loops_per_plots) == 1)         
+         joints_render_master_slave(Tt_master, Tt_slave_jnts_all, xlims, ylims, zlims, arms_offsets, rcm_p_fix, true, video); % visualize
     end
     
     %%% calculate mapping
@@ -116,10 +139,14 @@ for i = 1:size(Ts_master, 3)
     [tmp, ~] = error_T(Tt_slave_jnts_all(:,:,end), Tt_slave_dsr); % get positional error
     Tt_err_slave_wrist = [Tt_slave(1:3,1:3).'*tmp(1:3,:);Tt_slave(1:3,1:3).'*tmp(4:6,:)];
     vt_dsr_slave_wrist = [Tt_slave(1:3,1:3).'*vt_dsr_slave(1:3,:);Tt_slave(1:3,1:3).'*vt_dsr_slave(4:6,:)];
+    
+    
+
+    
 
     
     % calculate contrain jacobian
-    H = contrained_Jacob(Tt_slave_jnts(:,:,model_slave.rcm_top_jnt_idx+1), Jt_slave_s(:,:,2), Jt_slave_s(:,:,3), lamda_rcm);
+    H = contrained_Jacob(Jt_slave_s(:,:,2), Jt_slave_s(:,:,3), lamda_rcm, nPlane_i, nPlane_m);
     
     
 %     vt_slave = control_inv_jacob_redundant(Tt_err_slave, vt_dsr_slave, Jt_slave, lambda, zeros(7,1)); % inverse jacobian control for redundant robot
@@ -134,17 +161,28 @@ for i = 1:size(Ts_master, 3)
 end
 
 %% show simulation result
-figure()
-plot(ds)
-title('rcm drift')
-figure()
-plot(error_transl_norms)
-title('translational tracking error')
-figure()
-plot(error_rot_norms)
-title('rotational tracking error')
+% figure()
+% fig.WindowState = 'maximized';
+% plot(ds)
+% title('rcm drift')
+% saveas(fig,'MySimulinkDiagram.png');
+% 
+% fig = figure()
+% fig.WindowState = 'maximized';
+% plot(error_transl_norms)
+% title('translational tracking error')
+% 
+% figure()
+% plot(error_rot_norms)
+% title('rotational tracking error')
+% saveas(fig,'MySimulinkDiagram.png');
 
-figure()
+plot_simple('rcm drift', ds, fullfile(result_dir, 'rcm drift.png'))
+plot_simple('translational tracking error', error_transl_norms, fullfile(result_dir, 'track_transl_err.png'))
+plot_simple('rotational tracking error', error_rot_norms, fullfile(result_dir, 'track_rot_err.png'))
+
+fig = figure()
+fig.WindowState = 'maximized';
 subplot(3,1,1)
 plot(reshape(Ts_master(1,4,:), size(Ts_master,3),1))
 title('master translational xyz')
@@ -152,5 +190,17 @@ subplot(3,1,2)
 plot(reshape(Ts_master(2,4,:), size(Ts_master,3),1))
 subplot(3,1,3)
 plot(reshape(Ts_master(3,4,:), size(Ts_master,3),1))
+saveas(fig,'MTM trajectory');
+
+
+close(video)
+
+function plot_simple(title_str, x, save_file)
+    fig = figure();
+    fig.WindowState = 'maximized';
+    plot(x);
+    title(title_str);
+    saveas(fig,save_file);
+end
 
 

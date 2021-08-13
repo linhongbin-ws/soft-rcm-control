@@ -1,4 +1,4 @@
-function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_offsets, rcm_p, isOnlyTipFrame)
+function video = joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_offsets, rcm_p, isOnlyTipFrame, video)
     persistent chain;
     frame_length = 0.15;
     frame_width = 0.3;
@@ -6,13 +6,16 @@ function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_of
     lim_Max = 0.3;
     foundFig=findobj('Tag','Fast_Plot');
     patch_length = 0.07;
-    
+    is_initial = false;
 
     
     
     if isempty(foundFig)
+        is_initial = true;
+        
         % create figure
         fig=figure('Color','white');
+        fig.WindowState = 'maximized';  
         clf(fig);
         set(fig,'Name','MTM_Trajectory');
         set(fig,'DoubleBuffer','on','Tag','Fast_Plot');
@@ -85,6 +88,12 @@ function joints_render_master_slave(Ts_mst, Ts_slv, xlims, ylims, zlims, arms_of
     xlim(xlims)
     ylim(ylims)
     zlim(zlims)
+    
+    
+    if ~isempty(video)
+        frame = getframe(gcf); %get frame
+        writeVideo(video, frame);
+    end
 end
 
 

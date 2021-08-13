@@ -1,6 +1,6 @@
 % model = model_Flexiv();
-model = model_Flexiv_with_stick();
-% model = model_instrument();
+% model = model_Flexiv_with_stick();
+model = model_instrument();
 
 q = zeros(model.DOF,1);
 % q = deg2rad([0;-15;0;-75;0;90;-45]);
