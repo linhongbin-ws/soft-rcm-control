@@ -10,11 +10,11 @@ function m = model_instrument()
     
     
     m.table = [
-        % type   alpha   a           d       theta
+        % type   alpha          a                       d           theta               lower_limit           upper_limit        vel_limit
         %=====================================
-           1      0     0           m.l_tool    0;
-           1     -pi/2  0           0        -pi/2;
-           1     -pi/2  m.l_pitch2yaw 0        -pi/2;
+           1            0              0                  m.l_tool           0                  -4.53786               4.53786               0;
+           1         -pi/2           0                      0             -pi/2                 -1.39626               1.39626               0;
+           1         -pi/2  m.l_pitch2yaw          0             -pi/2                 -1.39626               1.39626               0;
            ];
     m.tip = [0 -1  0 0;
            0   0  1 m.l_yaw2ctrlpnt;

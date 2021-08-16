@@ -19,9 +19,15 @@ end
  zlims = [-0.5 2.5];
 arms_offsets = [0,0.5,0]; % master slave arm offset in the render figure
 loops_per_plots = 10; % render every n control loop
-mp4_file_dir = fullfile(result_dir, 'render');
-video = VideoWriter(mp4_file_dir);
-open(video)
+is_video = false;
+if is_video
+    mp4_file_dir = fullfile(result_dir, 'render');
+    video = VideoWriter(mp4_file_dir);
+    open(video)
+else
+    video = [];
+end
+
 
 %%% control
 map_R = []; % empty if track current R
