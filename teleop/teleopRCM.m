@@ -74,12 +74,15 @@ classdef teleopRCM < handle
 
     methods(Access = public)
 
-        function obj = teleopRCM()  % Constructor
-
+        function obj = teleopRCM()  
+            %%% contructor %%%
+            
             obj.topics('idle')
         end
         
         function master_cb(obj, transform)
+            %%%  Master Arm ros topics callback (dvrk V2) %%%
+            
             rotm = quat2rotm([transform.Rotation.X transform.Rotation.Y transform.Rotation.Z transform.Rotation.W]);
             posv = [transform.Translation.X; transform.Translation.Y; transform.Translation.Z];
             if ~isempty(obj.Tt_master)
@@ -89,6 +92,8 @@ classdef teleopRCM < handle
         end
         
         function master_cb1(obj, Pose)
+            %%%  Master Arm ros topics callback (dvrk V1) %%%
+            
             rotm = quat2rotm([Pose.Orientation.X Pose.Orientation.Y Pose.Orientation.Z Pose.Orientation.W]);
             posv = [Pose.Position.X; Pose.Position.Y; Pose.Position.Z];
             if ~isempty(obj.Tt_master)
@@ -99,14 +104,20 @@ classdef teleopRCM < handle
         end
         
         function slave_idle_cb(obj, q)
+            %%% Slave Arm ros topic callback when not in teleoperation %%%
+            
             obj.qt_slave = q;
         end
         
         function slave_wrist_cb(obj, q)
+            %%% Slave Wrist ros topic callback
+            
             obj.qt_slave_wrist = q;
         end
         
         function slave_teleop_cb(obj,q)
+            %%% Slave Arm ros topic callback when in teleoperation %%%
+            
             obj.qt_slave = q;
             is_initial_loop_teleop = obj.is_initial_loop_teleop;
             obj.step_control();
@@ -115,30 +126,33 @@ classdef teleopRCM < handle
                 return
             end
             
+            %%% send slave arm commands
             msg = rosmessage(obj.pub_slave);
             for i = 1:7
                 msg.Position(i) = obj.qt_slave_dsr(i);
             end
             obj.pub_slave.send(msg);
             
+            %%% send slave wrist commands
             msg = rosmessage(obj.pub_slave_wrist);
             for i = 1:3
                 msg.Position(i) = obj.qt_slave_wrist_dsr(i);
             end
             obj.pub_slave_wrist.send(msg);
             
+            %%% send lamda_rcm
             msg = rosmessage(obj.pub_lamda_rcm);
             msg.Data = obj.lamda_rcm;
             obj.pub_lamda_rcm.send(msg);
             
-%             fprintf("publish\n")
         end
 
         
         function topics(obj, state)
+            %%% init ros topics %%%
+            
+            %%% master arm ros topics
             if obj.dvrk_version == 2
-
-                % master subscribe
                 sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
                 obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
             elseif  obj.dvrk_version == 1
@@ -147,16 +161,9 @@ classdef teleopRCM < handle
             else
                 error('not support')
             end
-        
-            % slave subscribe
-            sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
-            obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
-
-            % slave publish
+            
+            % slave arm ros topics
             obj.pub_slave       = rospublisher('/flexiv_set_js','sensor_msgs/JointState');
-            obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
-            obj.pub_lamda_rcm = rospublisher('/flexiv_lamda_rcm','std_msgs/Float64');
-
             if strcmp(state, 'idle')
                 % slave subscribe
                 sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
@@ -169,11 +176,23 @@ classdef teleopRCM < handle
             else
                 error('not support')
             end
+        
+            %%% slave wrist ros topics
+            sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
+            obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
+            obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
+
+            %%% lamda_rcm ros topics
+            obj.pub_lamda_rcm = rospublisher('/flexiv_lamda_rcm','std_msgs/Float64');
+
                 
 
         end
         
         function close(obj)
+            %%% close controller %%%
+            
+            %%% clear subscribe ros topics (one way to clear safely)
             obj.sub_master.NewMessageFcn = @(a, b, c)[]; 
             obj.sub_slave_wrist.NewMessageFcn = @(a, b, c)[];
             obj.sub_slave.NewMessageFcn = @(a, b, c)[];
@@ -181,6 +200,8 @@ classdef teleopRCM < handle
         
         
         function reset(obj)
+            %%% reset variables %%%
+            
             obj.rcm_p = [];
             obj.rcm_p0 = [];
             obj.Tt_mns_1_master = [];
@@ -196,18 +217,24 @@ classdef teleopRCM < handle
         end
         
         function start_teleop(obj)
+            %%% start teleoperation control %%%
+            
             obj.reset()
             obj.is_initial_loop_teleop = true;
             obj.topics('teleop');
         end
         
         function stop_teleop(obj)
+            %%% stop teleoperation control %%%
+            
              obj.topics('idle');
         end
 
 
         function step_control(obj)
+            %%% step function for teleoperation control %%%
             
+            %%% run at the first step control
             if obj.is_initial_loop_teleop
                 obj.q0_slave = obj.qt_slave;
                 obj.q0_slave_wrist = obj.qt_slave_wrist; 
@@ -220,7 +247,6 @@ classdef teleopRCM < handle
                 obj.map_R =  obj.T0_master(1:3,1:3).' * obj.T0_slave_tip(1:3,1:3); 
                 
                 obj.is_initial_loop_teleop = false;
-         
                 return
             end
 
