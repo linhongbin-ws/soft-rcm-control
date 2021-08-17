@@ -11,7 +11,7 @@ classdef Visualizer < handle
      zlims = [-0.5 2.5];
     arms_offsets = [0,0.5,0]; % master slave arm offset in the render figure
     loops_per_plots = 10; % render every n control loop
-    dvrk_version = 1
+    dvrk_version = 2
     
     %%% kinematics
     model_slave = model_Flexiv_with_stick();
@@ -152,7 +152,7 @@ classdef Visualizer < handle
             rcm_top_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_top_jnt_idx+1);
             rcm_Tip_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_tip_jnt_idx+1);
             obj.rcm_p = rcm_top_T(1:3,4)*(1-obj.lamda_rcm) + rcm_Tip_T(1:3,4)*obj.lamda_rcm;
-            joints_render_master_slave(obj.Tt_master, obj.Tt_slave_jnts_all, obj.xlims, obj.ylims, obj.zlims, obj.arms_offsets, obj.rcm_p, true); % visualize
+            joints_render_master_slave(obj.Tt_master, obj.Tt_slave_jnts_all, obj.xlims, obj.ylims, obj.zlims, obj.arms_offsets, obj.rcm_p, true, []); % visualize
         end
 
 

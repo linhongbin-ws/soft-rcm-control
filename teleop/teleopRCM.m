@@ -13,10 +13,10 @@ classdef teleopRCM < handle
     loops_per_plots = 10; % render every n control loop
 
     %%% control
-    transl_scale = 0.2; %mapping scale for translation
+    transl_scale = 0.5; %mapping scale for translation
     lamda_rcm0 = 0.5; %set inital rcm point with lamda
-    tracking_gain_transl = 200; %control gain for tracking PD control
-    lambda_transl = 0.0001; % lamda = D/P, D=velocity gain, P=position gain
+    tracking_gain_transl = 100; %control gain for tracking PD control
+    lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
     tracking_gain_rot = 100; %control gain for tracking PD control
     lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
 
@@ -24,11 +24,13 @@ classdef teleopRCM < handle
     %%% kinematics
     model_slave = model_Flexiv_with_stick();
     model_slave_wrist = model_instrument();
-    q0_slave = deg2rad([0;-15;0;-75;0;90;-45]);
-    q0_slave_wrist =  deg2rad([0,0,0].'); 
+    q0_slave 
+    q0_slave_wrist  
+    nPlane_i = [1;0;0];
+    nPlane_m = [0;1;0];
     
     %%% dvrk version
-    dvrk_version = 1;
+    dvrk_version = 2;
     
     % variables
     qs_slave
@@ -70,14 +72,20 @@ classdef teleopRCM < handle
     map_R 
     T0_slave_tip
     pub_lamda_rcm
+    rcm_p_fix
+    arm
   end
 
     methods(Access = public)
 
-        function obj = teleopRCM()  
+        function obj = teleopRCM(arm)  
             %%% contructor %%%
-            
+            if ~strcmp(arm, "MTML") && ~strcmp(arm, "MTMR")
+                error("arm type not recognize")
+            end
+            obj.arm = arm;
             obj.topics('idle')
+            pause(0.2)
         end
         
         function master_cb(obj, transform)
@@ -154,10 +162,10 @@ classdef teleopRCM < handle
             %%% master arm ros topics
             if obj.dvrk_version == 2
                 sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
-                obj.sub_master = rossubscriber('/MTML/measured_cp',sub_master_cb,'BufferSize',2);
+                obj.sub_master = rossubscriber(['/',obj.arm,'/measured_cp'],sub_master_cb,'BufferSize',2);
             elseif  obj.dvrk_version == 1
                 sub_master_cb1 = @(src,msg)(obj.master_cb1(msg.Pose));
-                obj.sub_master = rossubscriber('/dvrk/MTML/position_cartesian_current',sub_master_cb1,'BufferSize',2);
+                obj.sub_master = rossubscriber(['/dvrk/',obj.arm,'/position_cartesian_current'],sub_master_cb1,'BufferSize',2);
             else
                 error('not support')
             end
@@ -233,23 +241,7 @@ classdef teleopRCM < handle
 
         function step_control(obj)
             %%% step function for teleoperation control %%%
-            
-            %%% run at the first step control
-            if obj.is_initial_loop_teleop
-                obj.q0_slave = obj.qt_slave;
-                obj.q0_slave_wrist = obj.qt_slave_wrist; 
-                [obj.T0_slave,~]       = fk_geom(obj.q0_slave,      obj.model_slave.table,       obj.model_slave.tip,       obj.model_slave.method,false,[]); % get initial slave T
-                [obj.T0_slave_wrist,~] = fk_geom(obj.q0_slave_wrist,obj.model_slave_wrist.table, obj.model_slave_wrist.tip, obj.model_slave_wrist.method,false,[]); % get initial slave wrist T
-                obj.T0_master = obj.Tt_master; 
-                
-                %%% use inital R as mapping R (one way to reduce rotational tracking error)
-                obj.T0_slave_tip = obj.T0_slave*obj.T0_slave_wrist;
-                obj.map_R =  obj.T0_master(1:3,1:3).' * obj.T0_slave_tip(1:3,1:3); 
-                
-                obj.is_initial_loop_teleop = false;
-                return
-            end
-
+           
             
             %%% slave kinematics
             [obj.Tt_slave_jnts, obj.Jt_slave_s]           =fk_geom(obj.qt_slave, obj.model_slave.table, obj.model_slave.tip, obj.model_slave.method, true, [obj.model_slave.rcm_top_jnt_idx, obj.model_slave.rcm_tip_jnt_idx]);
@@ -260,6 +252,32 @@ classdef teleopRCM < handle
                 tmp = cat(3, tmp, obj.Tt_slave*obj.Tt_slave_wrist_jnts(:,:,k));
             end
             obj.Tt_slave_jnts_all = tmp;
+            rcm_Top_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_top_jnt_idx+1);
+            rcm_Tip_T = obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_tip_jnt_idx+1);
+            obj.rcm_p = rcm_Top_T(1:3,4)*(1-obj.lamda_rcm) + rcm_Tip_T(1:3,4)*obj.lamda_rcm;
+
+            %%% calculate lamda
+            if obj.is_initial_loop_teleop
+                obj.rcm_p_fix = obj.rcm_p;
+            end
+            obj.lamda_rcm = norm(rcm_Top_T(1:3,4) - obj.rcm_p_fix)/obj.model_slave.stick_length;
+            
+            %%% run at the first step control
+            if obj.is_initial_loop_teleop
+                obj.q0_slave = obj.qt_slave;
+                obj.q0_slave_wrist = obj.qt_slave_wrist; 
+                obj.T0_slave = obj.Tt_slave_jnts(:,:,end);
+                obj.T0_slave_wrist = obj.Tt_slave_wrist_jnts(:,:,end);
+                obj.T0_master = obj.Tt_master; 
+                
+                %%% use inital R as mapping R (one way to reduce rotational tracking error)
+                obj.T0_slave_tip = obj.T0_slave*obj.T0_slave_wrist;
+                obj.map_R =  obj.T0_master(1:3,1:3).' * obj.T0_slave_tip(1:3,1:3); 
+                
+           
+                obj.is_initial_loop_teleop = false;
+                return
+            end
 
 
             %%% mapping
@@ -267,14 +285,14 @@ classdef teleopRCM < handle
             [Tt_err_slave, ~] = error_T(obj.Tt_slave, Tt_slave_mapped); % get positional error
             [vel_master, ~] = error_T(obj.Tt_master,obj.Tt_mns_1_master);
             vt_slave_mapped = [obj.map_R*vel_master(1:3);obj.map_R*vel_master(4:6)]; % get desired velocity
-%             tmp = map_MTM2Flexiv(obj.Tt_master, obj.map_R, obj.T0_master, obj.T0_slave_tip, obj.transl_scale);
+
             [tmp, ~] = error_T(obj.Tt_slave_jnts_all(:,:,end), Tt_slave_mapped); % get positional error
             Tt_err_slave_wrist = [obj.Tt_slave(1:3,1:3).'*tmp(1:3,:);obj.Tt_slave(1:3,1:3).'*tmp(4:6,:)];
             vt_slave_wrist_mapped = [obj.Tt_slave(1:3,1:3).'*vt_slave_mapped(1:3,:);obj.Tt_slave(1:3,1:3).'*vt_slave_mapped(4:6,:)];
 
 
             %%% control
-            H = contrained_Jacob(obj.Tt_slave_jnts(:,:,obj.model_slave.rcm_top_jnt_idx+1), obj.Jt_slave_s(:,:,2), obj.Jt_slave_s(:,:,3), obj.lamda_rcm); % contrain jacobian
+            H = contrained_Jacob(obj.Jt_slave_s(:,:,2), obj.Jt_slave_s(:,:,3), obj.lamda_rcm, obj.nPlane_i, obj.nPlane_m); % contrain jacobian
             [obj.qdott_slave, obj.error_transl_norm] = control_inv_jacob_rdd_pos_rcm(Tt_err_slave, vt_slave_mapped, obj.Jt_slave_s(:,:,1), H, obj.lambda_transl, zeros(7,1), obj.tracking_gain_transl); % inverse jacobian control for redundant robot
             [obj.qdott_slave_wrist, obj.error_rot_norm] = control_inv_jacob_rot(Tt_err_slave_wrist,vt_slave_wrist_mapped,obj.Jt_slave_wrist,obj.lambda_rot, obj.tracking_gain_rot);
 
