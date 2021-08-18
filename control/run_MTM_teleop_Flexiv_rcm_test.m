@@ -130,8 +130,10 @@ for i = 1:size(Ts_master, 3)
 %     ds = [ds, norm(vec)];
     
     %%% plot render
-    if(mod(i,loops_per_plots) == 1)         
+    if(mod(i,loops_per_plots) == 1) 
+        tic
          joints_render_master_slave(Tt_master, Tt_slave_jnts_all, xlims, ylims, zlims, arms_offsets, rcm_p_fix, true, video); % visualize
+         toc
     end
     
     %%% calculate mapping
@@ -196,7 +198,7 @@ subplot(3,1,2)
 plot(reshape(Ts_master(2,4,:), size(Ts_master,3),1))
 subplot(3,1,3)
 plot(reshape(Ts_master(3,4,:), size(Ts_master,3),1))
-saveas(fig,'MTM trajectory');
+saveas(fig,fullfile(result_dir, 'trajectory.png'));
 
 
 close(video)

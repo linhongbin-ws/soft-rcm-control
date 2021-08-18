@@ -1,10 +1,10 @@
 addpath(genpath(fullfile('..','..','soft-rcm-control')))
 controller = teleopRCM('MTML');
 fprintf('before teleop\n')
-controller.start_teleop();
+controller.start();
 fprintf('start teleop\n')
-pause(30);
-controller.stop_teleop();
+pause(5);
+controller.stop();
 fprintf('stop teleop\n')
 controller.close()
 fprintf('close teleop\n')

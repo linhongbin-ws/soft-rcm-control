@@ -19,6 +19,8 @@ classdef teleopRCM < handle
     lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
     tracking_gain_rot = 100; %control gain for tracking PD control
     lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
+    error_transl_norm_max = 0.1;
+    error_rot_norm_max = 0.1;
 
 
     %%% kinematics
@@ -28,6 +30,9 @@ classdef teleopRCM < handle
     q0_slave_wrist  
     nPlane_i = [1;0;0];
     nPlane_m = [0;1;0];
+    map_R = [1 0 0;
+             0 1 0;
+             0 0 1];
     
     %%% dvrk version
     dvrk_version = 2;
@@ -42,8 +47,6 @@ classdef teleopRCM < handle
     qdott_slave
     rcm_ps = [];
     ds = [];
-    error_transl_norms = [];
-    error_rot_norms = [];
     is_init = false;
     Tt_master
     Tt_mns_1_master
@@ -68,12 +71,21 @@ classdef teleopRCM < handle
     qdott_slave_wrist
     error_transl_norm
     error_rot_norm
-    rcm_p
-    map_R 
+    rcm_p 
     T0_slave_tip
     pub_lamda_rcm
     rcm_p_fix
     arm
+    is_exc_jnt_lim_slave
+    bools_exc_jnt_lim_slave
+    is_exc_jnt_lim_slave_dsr
+    bools_exc_jnt_lim_slave_dsr
+    is_exc_jnt_lim_slave_wrist
+    bools_exc_jnt_lim_slave_wrist
+    is_exc_jnt_lim_slave_wrist_dsr
+    bools_exc_jnt_lim_slave_wrist_dsr
+    is_exc_transl_err
+    is_exc_rot_err
   end
 
     methods(Access = public)
@@ -85,7 +97,7 @@ classdef teleopRCM < handle
             end
             obj.arm = arm;
             obj.topics('idle')
-            pause(0.2)
+            pause(0.3)
         end
         
         function master_cb(obj, transform)
@@ -127,8 +139,24 @@ classdef teleopRCM < handle
             %%% Slave Arm ros topic callback when in teleoperation %%%
             
             obj.qt_slave = q;
+            if obj.check_empty_sub_signals()
+                return
+            end
             is_initial_loop_teleop = obj.is_initial_loop_teleop;
             obj.step_control();
+            
+            
+            %%% check status
+            if isempty(obj.qt_slave_wrist_dsr) || isempty(obj.qt_slave_dsr)
+                return
+            end
+            if obj.update_jnt_limit_check()
+                return
+            end
+            if obj.update_tracking_err()
+                return
+            end
+
             
             if is_initial_loop_teleop
                 return
@@ -200,6 +228,7 @@ classdef teleopRCM < handle
         function close(obj)
             %%% close controller %%%
             
+            fprintf("close controller ...\n")
             %%% clear subscribe ros topics (one way to clear safely)
             obj.sub_master.NewMessageFcn = @(a, b, c)[]; 
             obj.sub_slave_wrist.NewMessageFcn = @(a, b, c)[];
@@ -218,21 +247,21 @@ classdef teleopRCM < handle
             obj.T0_master = [];
             obj.lamda_rcm = obj.lamda_rcm0;
             obj.qdott_slave = [];
-            obj.map_R = [];
+%             obj.map_R = [];
             
 
             
         end
         
-        function start_teleop(obj)
+        function start(obj)
             %%% start teleoperation control %%%
             
-            obj.reset()
+            obj.reset();
             obj.is_initial_loop_teleop = true;
             obj.topics('teleop');
         end
         
-        function stop_teleop(obj)
+        function stop(obj)
             %%% stop teleoperation control %%%
             
              obj.topics('idle');
@@ -270,9 +299,9 @@ classdef teleopRCM < handle
                 obj.T0_slave_wrist = obj.Tt_slave_wrist_jnts(:,:,end);
                 obj.T0_master = obj.Tt_master; 
                 
-                %%% use inital R as mapping R (one way to reduce rotational tracking error)
-                obj.T0_slave_tip = obj.T0_slave*obj.T0_slave_wrist;
-                obj.map_R =  obj.T0_master(1:3,1:3).' * obj.T0_slave_tip(1:3,1:3); 
+%                 %%% use inital R as mapping R (one way to reduce rotational tracking error)
+%                 obj.T0_slave_tip = obj.T0_slave*obj.T0_slave_wrist;
+%                 obj.map_R =  obj.T0_master(1:3,1:3).' * obj.T0_slave_tip(1:3,1:3); 
                 
            
                 obj.is_initial_loop_teleop = false;
@@ -301,7 +330,96 @@ classdef teleopRCM < handle
             obj.qt_slave_dsr       = obj.qt_slave      +obj.qdott_slave*obj.time_delta;
             obj.qt_slave_wrist_dsr = obj.qt_slave_wrist+obj.qdott_slave_wrist*obj.time_delta;
         end
-
-
+        
+        function is_empty = check_empty_sub_signals(obj)
+            is_empty = false;
+            
+            if isempty(obj.Tt_master)
+                is_empty = true;
+            end
+            
+            if isempty(obj.qt_slave)
+                is_empty = true;
+            end
+            
+                        
+            if isempty(obj.qt_slave_wrist)
+                is_empty = true;
+            end
+        end
+        
+        function is_abnormal = update_jnt_limit_check(obj)
+            
+            is_abnormal =false;
+            
+            %%% check slave joint limit
+            qmin = obj.model_slave.table(2:8,9);
+            qmax = obj.model_slave.table(2:8,10);
+            [obj.is_exc_jnt_lim_slave, obj.bools_exc_jnt_lim_slave]         = jnt_limit_check(obj.qt_slave,     qmin, qmax);
+%             disp("dsr")
+%             disp(obj.qt_slave_dsr)
+%             disp("limit")
+%             disp(qmin)
+            [obj.is_exc_jnt_lim_slave_dsr, obj.bools_exc_jnt_lim_slave_dsr] = jnt_limit_check(obj.qt_slave_dsr, qmin, qmax);
+            if obj.is_exc_jnt_lim_slave
+                fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave.');
+                obj.close();
+                is_abnormal = true;
+            end
+            if obj.is_exc_jnt_lim_slave_dsr
+                fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_dsr.');
+                obj.close();
+                is_abnormal = true;
+            end
+            
+            %%% check slave wrist joint limit
+            qmin = obj.model_slave_wrist.table(1:3,6);
+            qmax = obj.model_slave_wrist.table(1:3,7);
+            [obj.is_exc_jnt_lim_slave_wrist, obj.bools_exc_jnt_lim_slave_wrist]         = jnt_limit_check(obj.qt_slave_wrist,     qmin, qmax);
+            [obj.is_exc_jnt_lim_slave_wrist_dsr, obj.bools_exc_jnt_lim_slave_wrist_dsr] = jnt_limit_check(obj.qt_slave_wrist_dsr, qmin, qmax);
+            if obj.is_exc_jnt_lim_slave_wrist
+                fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist.');
+                obj.close();
+                is_abnormal = true;
+            end
+            if obj.is_exc_jnt_lim_slave_wrist_dsr
+                fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist_dsr.');
+                obj.close();
+                is_abnormal = true;
+            end
+        end
+        
+        function master_R_dsr = get_master_R_dsr(obj)
+            [Tt_slave, ~]       =fk_geom(obj.qt_slave, obj.model_slave.table, obj.model_slave.tip, obj.model_slave.method, false, []);
+            [Tt_slave_wrist, ~] =fk_geom(obj.qt_slave_wrist, obj.model_slave_wrist.table, obj.model_slave_wrist.tip, obj.model_slave_wrist.method, false, []);
+            Tt_slave_tip = Tt_slave*Tt_slave_wrist;
+            
+            master_R_dsr =  obj.map_R.' * Tt_slave_tip(1:3,1:3); 
+        end
+        
+        function is_abnormal = update_tracking_err(obj)
+            
+            is_abnormal = false;
+            
+            %%% translational error
+            obj.is_exc_transl_err = obj.error_transl_norm>obj.error_transl_norm_max;
+            if obj.is_exc_transl_err
+                fprintf("exceeds tracking translational error %.3f (max %.3f)\n", obj.error_transl_norm, obj.error_transl_norm_max);
+                obj.close();
+                is_abnormal =true;
+            end
+            
+            %%% rotational error
+            obj.is_exc_rot_err = obj.error_rot_norm>obj.error_rot_norm_max;
+            if obj.is_exc_rot_err
+                fprintf("exceeds tracking rotational error %.3f (max %.3f)\n", obj.error_rot_norm, obj.error_rot_norm_max);
+                obj.close();
+                is_abnormal =true;
+            end
+            
+        end
+       
+        
     end
+
 end
