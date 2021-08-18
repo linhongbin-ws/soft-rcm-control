@@ -86,16 +86,17 @@ classdef teleopRCM < handle
     bools_exc_jnt_lim_slave_wrist_dsr
     is_exc_transl_err
     is_exc_rot_err
+    arm_name
   end
 
     methods(Access = public)
 
-        function obj = teleopRCM(arm)  
+        function obj = teleopRCM(arm_name)  
             %%% contructor %%%
-            if ~strcmp(arm, "MTML") && ~strcmp(arm, "MTMR")
+            if ~strcmp(arm_name, "MTML") && ~strcmp(arm_name, "MTMR")
                 error("arm type not recognize")
             end
-            obj.arm = arm;
+            obj.arm_name = arm_name;
             obj.topics('idle')
             pause(0.3)
         end
@@ -190,10 +191,10 @@ classdef teleopRCM < handle
             %%% master arm ros topics
             if obj.dvrk_version == 2
                 sub_master_cb = @(src,msg)(obj.master_cb(msg.Transform));
-                obj.sub_master = rossubscriber(['/',obj.arm,'/measured_cp'],sub_master_cb,'BufferSize',2);
+                obj.sub_master = rossubscriber(['/',obj.arm_name,'/measured_cp'],sub_master_cb,'BufferSize',2);
             elseif  obj.dvrk_version == 1
                 sub_master_cb1 = @(src,msg)(obj.master_cb1(msg.Pose));
-                obj.sub_master = rossubscriber(['/dvrk/',obj.arm,'/position_cartesian_current'],sub_master_cb1,'BufferSize',2);
+                obj.sub_master = rossubscriber(['/dvrk/',obj.arm_name,'/position_cartesian_current'],sub_master_cb1,'BufferSize',2);
             else
                 error('not support')
             end
@@ -395,6 +396,17 @@ classdef teleopRCM < handle
             Tt_slave_tip = Tt_slave*Tt_slave_wrist;
             
             master_R_dsr =  obj.map_R.' * Tt_slave_tip(1:3,1:3); 
+        end
+        
+        function move_master_alignment(obj)
+
+             master_R_dsr = obj.get_master_R_dsr();
+             
+             r = dvrk.arm(obj.arm_name);
+             start = r.setpoint_cp();
+             start(1:3,1:3) = master_R_dsr;
+             r.move_cp(start).wait();
+             delete(r)
         end
         
         function is_abnormal = update_tracking_err(obj)
