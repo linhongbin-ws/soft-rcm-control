@@ -136,6 +136,41 @@ classdef teleopRCM < handle
             obj.qt_slave_wrist = q;
         end
         
+        function is_ready = is_ready_start(obj)
+            %%% check if the controller is ready to be started teleoperation %%%
+           
+           success_cnt_num = 50;
+           thres_ratio = 0.6;
+           %%% simulate the control for 100 loops
+           obj.reset();
+           obj.is_initial_loop_teleop = true;
+           success_cnt = 0;
+           is_ready = false;
+           for i = 1:success_cnt_num
+               pause(0.01);
+                if obj.check_empty_sub_signals()
+                        continue
+                end
+                is_initial_loop_teleop = obj.is_initial_loop_teleop;
+                obj.step_control();
+
+                %%% check status
+                if isempty(obj.qt_slave_wrist_dsr) || isempty(obj.qt_slave_dsr)
+                    continue
+                end
+                if obj.update_jnt_limit_check()
+                    continue
+                end
+                if obj.update_tracking_err()
+                    continue
+                end
+                
+                success_cnt = success_cnt +1;
+
+           end
+           is_ready = success_cnt > success_cnt_num*thres_ratio;
+        end
+        
         function slave_teleop_cb(obj,q)
             %%% Slave Arm ros topic callback when in teleoperation %%%
             
@@ -152,9 +187,11 @@ classdef teleopRCM < handle
                 return
             end
             if obj.update_jnt_limit_check()
+                obj.close()
                 return
             end
             if obj.update_tracking_err()
+                obj.close()
                 return
             end
 
@@ -364,12 +401,10 @@ classdef teleopRCM < handle
             [obj.is_exc_jnt_lim_slave_dsr, obj.bools_exc_jnt_lim_slave_dsr] = jnt_limit_check(obj.qt_slave_dsr, qmin, qmax);
             if obj.is_exc_jnt_lim_slave
                 fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave.');
-                obj.close();
                 is_abnormal = true;
             end
             if obj.is_exc_jnt_lim_slave_dsr
                 fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_dsr.');
-                obj.close();
                 is_abnormal = true;
             end
             
@@ -380,12 +415,10 @@ classdef teleopRCM < handle
             [obj.is_exc_jnt_lim_slave_wrist_dsr, obj.bools_exc_jnt_lim_slave_wrist_dsr] = jnt_limit_check(obj.qt_slave_wrist_dsr, qmin, qmax);
             if obj.is_exc_jnt_lim_slave_wrist
                 fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist.');
-                obj.close();
                 is_abnormal = true;
             end
             if obj.is_exc_jnt_lim_slave_wrist_dsr
                 fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist_dsr.');
-                obj.close();
                 is_abnormal = true;
             end
         end
@@ -417,7 +450,6 @@ classdef teleopRCM < handle
             obj.is_exc_transl_err = obj.error_transl_norm>obj.error_transl_norm_max;
             if obj.is_exc_transl_err
                 fprintf("exceeds tracking translational error %.3f (max %.3f)\n", obj.error_transl_norm, obj.error_transl_norm_max);
-                obj.close();
                 is_abnormal =true;
             end
             
@@ -425,7 +457,6 @@ classdef teleopRCM < handle
             obj.is_exc_rot_err = obj.error_rot_norm>obj.error_rot_norm_max;
             if obj.is_exc_rot_err
                 fprintf("exceeds tracking rotational error %.3f (max %.3f)\n", obj.error_rot_norm, obj.error_rot_norm_max);
-                obj.close();
                 is_abnormal =true;
             end
             
