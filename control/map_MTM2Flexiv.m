@@ -1,4 +1,4 @@
-function Flexiv_T = map_MTM2Flexiv(MTM_T, R, MTM_T_initial, Flexiv_T_initial, transl_scale)
+ function Flexiv_T = map_MTM2Flexiv(MTM_T, R, MTM_T_initial, Flexiv_T_initial, transl_scale)
 %     R = [-1 ,0, 0
 %          0, -1, 0
 %          0, 0, 1];

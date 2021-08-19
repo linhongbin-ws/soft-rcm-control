@@ -30,10 +30,10 @@ msg.Transform.Translation.X = Tt_master(1,4)+0.02;
 msg.Transform.Translation.Y = Tt_master(2,4);
 msg.Transform.Translation.Z = Tt_master(3,4);
 quat =  tform2quat(rot_T(deg2rad(15),'y')*Tt_master);
-msg.Transform.Rotation.X = quat(1);
-msg.Transform.Rotation.Y = quat(2);
-msg.Transform.Rotation.Z = quat(3);
-msg.Transform.Rotation.W = quat(4);
+msg.Transform.Rotation.W = quat(1);
+msg.Transform.Rotation.X = quat(2);
+msg.Transform.Rotation.Y = quat(3);
+msg.Transform.Rotation.Z = quat(4);
 pub.send(msg)
 
 addpath(genpath('/home/steven/code/dvrk-2-1/src/crtk/matlab_gen/msggen'))

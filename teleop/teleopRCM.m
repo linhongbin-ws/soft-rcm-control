@@ -104,7 +104,7 @@ classdef teleopRCM < handle
         function master_cb(obj, transform)
             %%%  Master Arm ros topics callback (dvrk V2) %%%
             
-            rotm = quat2rotm([transform.Rotation.X transform.Rotation.Y transform.Rotation.Z transform.Rotation.W]);
+            rotm = quat2rotm([transform.Rotation.W, transform.Rotation.X transform.Rotation.Y transform.Rotation.Z ]);
             posv = [transform.Translation.X; transform.Translation.Y; transform.Translation.Z];
             if ~isempty(obj.Tt_master)
                 obj.Tt_mns_1_master = obj.Tt_master;
@@ -115,7 +115,7 @@ classdef teleopRCM < handle
         function master_cb1(obj, Pose)
             %%%  Master Arm ros topics callback (dvrk V1) %%%
             
-            rotm = quat2rotm([Pose.Orientation.X Pose.Orientation.Y Pose.Orientation.Z Pose.Orientation.W]);
+            rotm = quat2rotm([Pose.Orientation.W, Pose.Orientation.X Pose.Orientation.Y Pose.Orientation.Z ]);
             posv = [Pose.Position.X; Pose.Position.Y; Pose.Position.Z];
             if ~isempty(obj.Tt_master)
                 obj.Tt_mns_1_master = obj.Tt_master;
@@ -429,6 +429,10 @@ classdef teleopRCM < handle
                 is_abnormal =true;
             end
             
+        end
+        
+        function delete(obj)
+            delete(obj)
         end
        
         
