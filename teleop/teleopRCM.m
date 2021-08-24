@@ -37,6 +37,12 @@ classdef teleopRCM < handle
     %%% dvrk version
     dvrk_version = 2;
     
+    
+    %%% record
+    is_record_master = 1;
+    is_record_slave = 1;
+    buffer_size = 6000;
+    
     % variables
     qs_slave
     qs_slave_wrist
@@ -87,6 +93,10 @@ classdef teleopRCM < handle
     is_exc_transl_err
     is_exc_rot_err
     arm_name
+    
+    Tt_master_records = []
+    qt_slave_records = []
+    qt_slave_wrist_records = []
   end
 
     methods(Access = public)
@@ -97,8 +107,40 @@ classdef teleopRCM < handle
                 error("arm type not recognize")
             end
             obj.arm_name = arm_name;
+            obj.reset()
             obj.topics('idle')
             pause(0.3)
+        end
+        
+        function record(obj)
+            if obj.is_record_master
+                if size(obj.Tt_master_records,2) > obj.buffer_size
+                    obj.Tt_master_records = cat(3, obj.Tt_master_records(:,:,2:end), obj.Tt_master);
+                else
+                    obj.Tt_master_records = cat(3, obj.Tt_master_records, obj.Tt_master);
+                end
+            end
+            if obj.is_record_slave
+                if size(obj.qt_slave_records,2) > obj.buffer_size
+                    obj.qt_slave_records = cat(2, obj.qt_slave_records(:,2:end), obj.qt_slave);
+                else
+                    obj.qt_slave_records = cat(2, obj.qt_slave_records, obj.qt_slave);
+                end
+                
+                if size(obj.qt_slave_wrist_records,2) > obj.buffer_size
+                    obj.qt_slave_wrist_records = cat(2, obj.qt_slave_wrist_records(:,2:end), obj.qt_slave_wrist);
+                else
+                    obj.qt_slave_wrist_records = cat(2, obj.qt_slave_wrist_records, obj.qt_slave_wrist);
+                end
+            end
+        end
+        
+        function save_record(obj)
+            Tt_master_records = obj.Tt_master_records;
+            qt_slave_records = obj.qt_slave_records;
+            qt_slave_wrist_records = obj.qt_slave_wrist_records;
+            
+            save('record.mat', 'Tt_master_records', 'qt_slave_records', 'qt_slave_wrist_records');
         end
         
         function master_cb(obj, transform)
@@ -128,6 +170,12 @@ classdef teleopRCM < handle
             %%% Slave Arm ros topic callback when not in teleoperation %%%
             
             obj.qt_slave = q;
+            
+            %%% send lamda_rcm
+            msg = rosmessage(obj.pub_lamda_rcm);
+            msg.Data = obj.lamda_rcm;
+            obj.pub_lamda_rcm.send(msg);
+            obj.record();
         end
         
         function slave_wrist_cb(obj, q)
@@ -180,6 +228,8 @@ classdef teleopRCM < handle
             end
             is_initial_loop_teleop = obj.is_initial_loop_teleop;
             obj.step_control();
+            
+            obj.record();
             
             
             %%% check status
@@ -237,16 +287,16 @@ classdef teleopRCM < handle
             end
             
             % slave arm ros topics
-            obj.pub_slave       = rospublisher('/flexiv_set_js','sensor_msgs/JointState');
+            obj.pub_slave       = rospublisher('/joint_cmds','sensor_msgs/JointState');
             if strcmp(state, 'idle')
                 % slave subscribe
                 sub_slave_idle_cb = @(src,msg)(obj.slave_idle_cb(msg.Position));
-                obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_idle_cb,'BufferSize',2);
+                obj.sub_slave = rossubscriber('/joint_states',sub_slave_idle_cb,'BufferSize',2);
 
             elseif strcmp(state, 'teleop')
                 % slave subscribe
                 sub_slave_teleop_cb = @(src,msg)(obj.slave_teleop_cb(msg.Position));
-                obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_teleop_cb,'BufferSize',2);
+                obj.sub_slave = rossubscriber('/joint_states',sub_slave_teleop_cb,'BufferSize',2);
             else
                 error('not support')
             end
@@ -286,6 +336,9 @@ classdef teleopRCM < handle
             obj.lamda_rcm = obj.lamda_rcm0;
             obj.qdott_slave = [];
 %             obj.map_R = [];
+            obj.Tt_master_records = [];
+            obj.qt_slave_records = [];
+            obj.qt_slave_wrist_records = [];
             
 
             

@@ -122,7 +122,7 @@ classdef Visualizer < handle
 
             % slave subscribe
             sub_slave_cb = @(src,msg)(obj.slave_cb(msg.Position));
-            obj.sub_slave = rossubscriber('/flexiv_get_js',sub_slave_cb,'BufferSize',2);
+            obj.sub_slave = rossubscriber('/joint_states',sub_slave_cb,'BufferSize',2);
 
 
             % slave subscribe
