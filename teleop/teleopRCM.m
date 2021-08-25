@@ -13,7 +13,7 @@ classdef teleopRCM < handle
     loops_per_plots = 10; % render every n control loop
 
     %%% control
-    transl_scale = 0.9; %mapping scale for translation
+    transl_scale = 0.4; %mapping scale for translation
     lamda_rcm0 = 0.5; %set inital rcm point with lamda
     tracking_gain_transl = 100; %control gain for tracking PD control
     lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
