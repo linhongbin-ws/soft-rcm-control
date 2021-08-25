@@ -4,9 +4,9 @@ r = dvrk.arm('MTML');
 
 start = r.setpoint_cp();
 %%% generate circle trajectory
-radius = 0.03;
-cicle_points = 100;
-rounds = 2;
+radius = 0.04;
+cicle_points = 300;
+rounds = 5;
 
 traj = [];
 for i = 1:cicle_points*rounds

@@ -13,7 +13,7 @@ classdef teleopRCM < handle
     loops_per_plots = 10; % render every n control loop
 
     %%% control
-    transl_scale = 0.5; %mapping scale for translation
+    transl_scale = 0.9; %mapping scale for translation
     lamda_rcm0 = 0.5; %set inital rcm point with lamda
     tracking_gain_transl = 100; %control gain for tracking PD control
     lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
@@ -21,6 +21,8 @@ classdef teleopRCM < handle
     lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
     error_transl_norm_max = 0.1;
     error_rot_norm_max = 0.1;
+    fil_ratio_slave = 0.85;
+    fil_ratio_slave_wrist = 0.85;
 
 
     %%% kinematics
@@ -73,7 +75,9 @@ classdef teleopRCM < handle
     Tt_slave
     Tt_slave_jnts_all
     qt_slave_dsr
+    qt_slave_dsr_fil
     qt_slave_wrist_dsr
+    qt_slave_wrist_dsr_fil
     qdott_slave_wrist
     error_transl_norm
     error_rot_norm
@@ -93,6 +97,8 @@ classdef teleopRCM < handle
     is_exc_transl_err
     is_exc_rot_err
     arm_name
+    qt_slave_dsr_filer
+    qt_slave_wrist_dsr_filer
     
     Tt_master_records = []
     qt_slave_records = []
@@ -114,7 +120,7 @@ classdef teleopRCM < handle
         
         function record(obj)
             if obj.is_record_master
-                if size(obj.Tt_master_records,2) > obj.buffer_size
+                if size(obj.Tt_master_records,3) > obj.buffer_size
                     obj.Tt_master_records = cat(3, obj.Tt_master_records(:,:,2:end), obj.Tt_master);
                 else
                     obj.Tt_master_records = cat(3, obj.Tt_master_records, obj.Tt_master);
@@ -253,14 +259,14 @@ classdef teleopRCM < handle
             %%% send slave arm commands
             msg = rosmessage(obj.pub_slave);
             for i = 1:7
-                msg.Position(i) = obj.qt_slave_dsr(i);
+                msg.Position(i) = obj.qt_slave_dsr_fil(i);
             end
             obj.pub_slave.send(msg);
             
             %%% send slave wrist commands
             msg = rosmessage(obj.pub_slave_wrist);
             for i = 1:3
-                msg.Position(i) = obj.qt_slave_wrist_dsr(i);
+                msg.Position(i) = obj.qt_slave_wrist_dsr_fil(i);
             end
             obj.pub_slave_wrist.send(msg);
             
@@ -339,8 +345,10 @@ classdef teleopRCM < handle
             obj.Tt_master_records = [];
             obj.qt_slave_records = [];
             obj.qt_slave_wrist_records = [];
-            
-
+            obj.qt_slave_dsr_filer = LPF(obj.fil_ratio_slave);
+            obj.qt_slave_wrist_dsr_filer = LPF(obj.fil_ratio_slave_wrist);
+            obj.qt_slave_dsr_fil = [];
+            obj.qt_slave_wrist_dsr_fil = [];
             
         end
         
@@ -420,6 +428,10 @@ classdef teleopRCM < handle
             %%% slave desired q
             obj.qt_slave_dsr       = obj.qt_slave      +obj.qdott_slave*obj.time_delta;
             obj.qt_slave_wrist_dsr = obj.qt_slave_wrist+obj.qdott_slave_wrist*obj.time_delta;
+            
+            %%% filter
+            obj.qt_slave_dsr_fil       = obj.qt_slave_dsr_filer.update(obj.qt_slave_dsr);
+            obj.qt_slave_wrist_dsr_fil = obj.qt_slave_wrist_dsr_filer.update(obj.qt_slave_wrist_dsr);
         end
         
         function is_empty = check_empty_sub_signals(obj)

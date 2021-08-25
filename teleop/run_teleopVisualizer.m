@@ -1,7 +1,7 @@
 addpath(genpath(fullfile('..','..','soft-rcm-control')))
 visualizer = Visualizer();
 pause(2)
-duration = 5*60;
+duration = 7*60;
 fprintf('start render\n')
 for i = 1:round(duration/0.2)
     tic
