@@ -20,10 +20,10 @@ classdef teleopRCM < handle
     tracking_gain_rot = 100; %control gain for tracking PD control
     lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
     error_transl_norm_max = 0.1;
-    error_rot_norm_max = 0.1;
+    error_rot_norm_max = 0.3;
     fil_ratio_slave = 0.85;
-    fil_ratio_slave_wrist = 0.85;
-
+    fil_ratio_slave_wrist = 0.2;
+    is_sim_wrist = false;
 
     %%% kinematics
     model_slave = model_Flexiv_with_stick();
@@ -103,6 +103,8 @@ classdef teleopRCM < handle
     Tt_master_records = []
     qt_slave_records = []
     qt_slave_wrist_records = []
+    wrist_controller 
+    
   end
 
     methods(Access = public)
@@ -115,6 +117,11 @@ classdef teleopRCM < handle
             obj.arm_name = arm_name;
             obj.reset()
             obj.topics('idle')
+            if obj.is_sim_wrist
+                obj.wrist_controller = [];
+            else
+                obj.wrist_controller = WristController();
+            end
             pause(0.3)
         end
         
@@ -182,6 +189,10 @@ classdef teleopRCM < handle
             msg.Data = obj.lamda_rcm;
             obj.pub_lamda_rcm.send(msg);
             obj.record();
+            
+            if ~obj.is_sim_wrist
+                obj.qt_slave_wrist =  obj.wrist_controller.get_current();
+            end
         end
         
         function slave_wrist_cb(obj, q)
@@ -264,11 +275,16 @@ classdef teleopRCM < handle
             obj.pub_slave.send(msg);
             
             %%% send slave wrist commands
-            msg = rosmessage(obj.pub_slave_wrist);
-            for i = 1:3
-                msg.Position(i) = obj.qt_slave_wrist_dsr_fil(i);
+            if obj.is_sim_wrist
+                msg = rosmessage(obj.pub_slave_wrist);
+                for i = 1:3
+                    msg.Position(i) = obj.qt_slave_wrist_dsr_fil(i);
+                end
+                obj.pub_slave_wrist.send(msg);
+            else
+                obj.wrist_controller.move(obj.qt_slave_wrist_dsr_fil)
+                obj.qt_slave_wrist = obj.qt_slave_wrist_dsr_fil;
             end
-            obj.pub_slave_wrist.send(msg);
             
             %%% send lamda_rcm
             msg = rosmessage(obj.pub_lamda_rcm);
@@ -308,9 +324,11 @@ classdef teleopRCM < handle
             end
         
             %%% slave wrist ros topics
-            sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
-            obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
-            obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
+            if obj.is_sim_wrist
+                sub_slave_wrist_cb = @(src,msg)(obj.slave_wrist_cb(msg.Position));
+                obj.sub_slave_wrist = rossubscriber('/flexiv_wrist_get_js',sub_slave_wrist_cb,'BufferSize',2);
+                obj.pub_slave_wrist = rospublisher('/flexiv_wrist_set_js','sensor_msgs/JointState');
+            end
 
             %%% lamda_rcm ros topics
             obj.pub_lamda_rcm = rospublisher('/flexiv_lamda_rcm','std_msgs/Float64');
@@ -327,6 +345,7 @@ classdef teleopRCM < handle
             obj.sub_master.NewMessageFcn = @(a, b, c)[]; 
             obj.sub_slave_wrist.NewMessageFcn = @(a, b, c)[];
             obj.sub_slave.NewMessageFcn = @(a, b, c)[];
+            obj.delete()
         end
         
         
@@ -465,11 +484,13 @@ classdef teleopRCM < handle
 %             disp(qmin)
             [obj.is_exc_jnt_lim_slave_dsr, obj.bools_exc_jnt_lim_slave_dsr] = jnt_limit_check(obj.qt_slave_dsr, qmin, qmax);
             if obj.is_exc_jnt_lim_slave
-                fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave.');
+                fprintf("flexiv slave measured exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave.');
+                fprintf("jnt: [%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f]\n",obj.qt_slave.');
                 is_abnormal = true;
             end
             if obj.is_exc_jnt_lim_slave_dsr
-                fprintf("exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_dsr.');
+                fprintf("flexiv slave desired exceeds joint limits: [%d,%d,%d,%d,%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_dsr.');
+                fprintf("jnt: [%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f]\n",obj.qt_slave_dsr.');
                 is_abnormal = true;
             end
             
@@ -479,11 +500,13 @@ classdef teleopRCM < handle
             [obj.is_exc_jnt_lim_slave_wrist, obj.bools_exc_jnt_lim_slave_wrist]         = jnt_limit_check(obj.qt_slave_wrist,     qmin, qmax);
             [obj.is_exc_jnt_lim_slave_wrist_dsr, obj.bools_exc_jnt_lim_slave_wrist_dsr] = jnt_limit_check(obj.qt_slave_wrist_dsr, qmin, qmax);
             if obj.is_exc_jnt_lim_slave_wrist
-                fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist.');
+                fprintf("wrist measured exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist.');
+                fprintf("jnt: [%.4f,%.4f,%.4f]\n",obj.qt_slave_wrist.');
                 is_abnormal = true;
             end
             if obj.is_exc_jnt_lim_slave_wrist_dsr
-                fprintf("exceeds joint limits: [%d,%d,%d]\n", obj.bools_exc_jnt_lim_slave_wrist_dsr.');
+                fprintf("wrist desired exceeds joint limits: [%d,%d,%d]\n", obj.qt_slave_wrist_dsr.');
+                fprintf("jnt: [%.4f,%.4f,%.4f]\n",obj.qt_slave_wrist);
                 is_abnormal = true;
             end
         end
@@ -528,6 +551,10 @@ classdef teleopRCM < handle
         end
         
         function delete(obj)
+            if ~obj.is_sim_wrist
+                obj.wrist_controller.close();
+            end
+                            
             delete(obj)
         end
        
