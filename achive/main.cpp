@@ -134,8 +134,8 @@ int main(int argc, char* argv[])
     Eigen::VectorXd cmdJntAcc = Eigen::VectorXd::Zero(robotDof);
 
     // trajectory parameters definition
-    double trajectoryStepSize = 0.002;
-    double velGain = 15;
+    double trajectoryStepSize = 0.0003;
+    double velGain = 200;
     double maxVel = DegreeToRadian(velGain);
     double minJntPosErr = DegreeToRadian(0.1);
     double maxJntPosErr = DegreeToRadian(1);
