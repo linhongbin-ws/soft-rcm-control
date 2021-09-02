@@ -37,6 +37,8 @@ tracking_gain_transl = 100; %control gain for tracking PD control
 lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
 tracking_gain_rot = 100; %control gain for tracking PD control
 lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
+lamda_drift_control = 0.01;
+gain_drift_control = 100;
 
 
 %%% kinematics
@@ -163,7 +165,14 @@ for i = 1:size(Ts_master, 3)
     error_transl_norms = [error_transl_norms, error_norm];
     [qdott_slave_wrist, error_norm] = control_inv_jacob_rot(Tt_err_slave_wrist,vt_dsr_slave_wrist,Jt_slave_wrist,lambda_rot, tracking_gain_rot);
     error_rot_norms = [error_rot_norms, error_norm];
-    qs_slave= [qs_slave, qt_slave+qdott_slave*time_delta]; % step velocity for flexiv
+    
+    % RCM Drift Error controlled with PI 
+      X_error_drift = rcm_p_fix- rcm_p;
+      X_error_drift_proj = [X_error_drift(1:2);0];
+      J_drift = Jt_slave_s(:,:,2) * (1-lamda_rcm) + Jt_slave_s(:,:,3) * lamda_rcm;
+     [qdott_slave_drift_control, ~] = control_inv_jacob_rdd_pos(X_error_drift_proj, zeros(3,1), J_drift, lamda_drift_control,  zeros(7,1), gain_drift_control);
+    
+    qs_slave= [qs_slave, qt_slave+(qdott_slave+qdott_slave_drift_control)*time_delta]; % step velocity for flexiv
     qs_slave_wrist = [qs_slave_wrist, qt_slave_wrist+qdott_slave_wrist*time_delta]; % step velocity for wrist
 
 end
