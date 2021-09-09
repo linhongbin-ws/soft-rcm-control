@@ -13,13 +13,13 @@ classdef teleopRCM < handle
     loops_per_plots = 10; % render every n control loop
 
     %%% control
-    transl_scale = 0.4; %mapping scale for translation
-    lamda_rcm0 = 0.5; %set inital rcm point with lamda
+    transl_scale = 1.5; %mapping scale for translation
+    lamda_rcm0 = 0.52; %set inital rcm point with lamda
     tracking_gain_transl = 100; %control gain for tracking PD control
     lambda_transl = 0.01; % lamda = D/P, D=velocity gain, P=position gain
     tracking_gain_rot = 100; %control gain for tracking PD control
     lambda_rot = 0.01; % lamda = D/P, D=velocity gain, P=position gain
-    gain_drift_control = 100; % gain for rcm drift control
+    gain_drift_control = 8; % gain for rcm drift control
     lamda_drift_control = 0.01; % control lamda for rcm drift control
     error_transl_norm_max = 0.1;
     error_rot_norm_max = 0.3;
@@ -101,11 +101,14 @@ classdef teleopRCM < handle
     arm_name
     qt_slave_dsr_filer
     qt_slave_wrist_dsr_filer
+    X_error_drift
     
     Tt_master_records = []
     qt_slave_records = []
     qt_slave_wrist_records = []
+    X_error_drift_records = []
     wrist_controller 
+    
     
   end
 
@@ -147,6 +150,13 @@ classdef teleopRCM < handle
                 else
                     obj.qt_slave_wrist_records = cat(2, obj.qt_slave_wrist_records, obj.qt_slave_wrist);
                 end
+                
+                if size(obj.X_error_drift_records,2) > obj.buffer_size
+                    obj.X_error_drift_records = cat(2, obj.X_error_drift_records(:,2:end), obj.X_error_drift);
+                else
+                    obj.X_error_drift_records = cat(2, obj.X_error_drift_records, obj.X_error_drift);
+                end
+
             end
         end
         
@@ -154,8 +164,9 @@ classdef teleopRCM < handle
             Tt_master_records = obj.Tt_master_records;
             qt_slave_records = obj.qt_slave_records;
             qt_slave_wrist_records = obj.qt_slave_wrist_records;
+            X_error_drift_records = obj.X_error_drift_records;
             
-            save('record.mat', 'Tt_master_records', 'qt_slave_records', 'qt_slave_wrist_records');
+            save('record.mat', 'Tt_master_records', 'qt_slave_records', 'qt_slave_wrist_records', 'X_error_drift_records');
         end
         
         function master_cb(obj, transform)
@@ -446,15 +457,14 @@ classdef teleopRCM < handle
             [obj.qdott_slave_wrist, obj.error_rot_norm] = control_inv_jacob_rot(Tt_err_slave_wrist,vt_slave_wrist_mapped,obj.Jt_slave_wrist,obj.lambda_rot, obj.tracking_gain_rot);
             
             % RCM Drift Error controlled with Propotional control 
-            X_error_drift = obj.rcm_p_fix- obj.rcm_p; % -(rcm_p-rcm_p_fix), minus is to reverse direction
-            X_error_drift_proj = [X_error_drift(1:2);0]; % project to x-y plane
+            obj.X_error_drift = obj.rcm_p_fix- obj.rcm_p; % -(rcm_p-rcm_p_fix), minus is to reverse direction
+            X_error_drift_proj = [obj.X_error_drift(1:2);0]; % project to x-y plane
             J_drift = obj.Jt_slave_s(:,:,2) * (1-obj.lamda_rcm) + obj.Jt_slave_s(:,:,3) * obj.lamda_rcm;
             [qdott_slave_drift_control, ~] = control_inv_jacob_rdd_pos(X_error_drift_proj, zeros(3,1), J_drift, obj.lamda_drift_control,  zeros(7,1), obj.gain_drift_control);   
-            obj.qdott_slave = obj.qdott_slave + qdott_slave_drift_control;
 
             
             %%% slave desired q
-            obj.qt_slave_dsr       = obj.qt_slave      +obj.qdott_slave*obj.time_delta;
+            obj.qt_slave_dsr       = obj.qt_slave      +(obj.qdott_slave + qdott_slave_drift_control)*obj.time_delta;
             obj.qt_slave_wrist_dsr = obj.qt_slave_wrist+obj.qdott_slave_wrist*obj.time_delta;
             
             %%% filter
